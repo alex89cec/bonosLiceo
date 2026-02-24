@@ -14,10 +14,11 @@ const updateSellerSchema = z.object({
     .optional(),
   new_password: z.string().min(8).optional(),
   is_active: z.boolean().optional(),
-  assignments: z
+  campaigns: z
     .array(
       z.object({
         campaign_id: z.string().uuid(),
+        assigned: z.boolean(),
         max_tickets: z.number().int().positive().nullable(),
       }),
     )
@@ -66,21 +67,19 @@ export async function GET(
       );
     }
 
-    // 2. Fetch campaign assignments with campaign details
+    // 2. Fetch ALL campaigns
+    const { data: allCampaigns } = await supabase
+      .from("campaigns")
+      .select("id, name, slug, status")
+      .order("created_at", { ascending: false });
+
+    // 3. Fetch campaign assignments for this seller
     const { data: assignments } = await supabase
       .from("campaign_sellers")
-      .select(
-        `
-        id,
-        campaign_id,
-        max_tickets,
-        assigned_at,
-        campaigns:campaign_id (id, name, slug, status)
-      `,
-      )
+      .select("id, campaign_id, max_tickets, assigned_at")
       .eq("seller_id", id);
 
-    // 3. Count reservations per campaign for this seller
+    // 4. Count reservations per campaign for this seller
     const { data: ticketCounts } = await supabase
       .from("reservations")
       .select("campaign_id")
@@ -92,15 +91,35 @@ export async function GET(
       countMap[r.campaign_id] = (countMap[r.campaign_id] || 0) + 1;
     });
 
-    // 4. Enrich assignments with sold_count
-    const enrichedAssignments = (assignments || []).map((a) => ({
-      ...a,
-      sold_count: countMap[a.campaign_id] || 0,
-    }));
+    // 5. Build assignment map for quick lookup
+    const assignmentMap: Record<string, { id: string; max_tickets: number | null; assigned_at: string }> = {};
+    (assignments || []).forEach((a) => {
+      assignmentMap[a.campaign_id] = {
+        id: a.id,
+        max_tickets: a.max_tickets,
+        assigned_at: a.assigned_at,
+      };
+    });
+
+    // 6. Build enriched campaigns list (all campaigns with assignment info)
+    const enrichedCampaigns = (allCampaigns || []).map((c) => {
+      const assignment = assignmentMap[c.id];
+      return {
+        campaign_id: c.id,
+        campaign_name: c.name,
+        campaign_slug: c.slug,
+        campaign_status: c.status,
+        assigned: !!assignment,
+        assignment_id: assignment?.id || null,
+        max_tickets: assignment?.max_tickets ?? null,
+        assigned_at: assignment?.assigned_at || null,
+        sold_count: countMap[c.id] || 0,
+      };
+    });
 
     return NextResponse.json({
       seller,
-      assignments: enrichedAssignments,
+      campaigns: enrichedCampaigns,
     });
   } catch (err) {
     console.error("Seller fetch error:", err);
@@ -153,7 +172,7 @@ export async function PUT(
       );
     }
 
-    const { full_name, email, new_password, is_active, assignments } =
+    const { full_name, email, new_password, is_active, campaigns } =
       parsed.data;
 
     const serviceClient = createServiceRoleClient();
@@ -225,14 +244,29 @@ export async function PUT(
         .eq("id", id);
     }
 
-    // 4. Update campaign assignment limits
-    if (assignments && assignments.length > 0) {
-      for (const a of assignments) {
-        await supabase
-          .from("campaign_sellers")
-          .update({ max_tickets: a.max_tickets })
-          .eq("campaign_id", a.campaign_id)
-          .eq("seller_id", id);
+    // 4. Update campaign assignments (assign/unassign + limits)
+    if (campaigns && campaigns.length > 0) {
+      for (const c of campaigns) {
+        if (c.assigned) {
+          // Upsert: assign campaign and set max_tickets
+          await supabase
+            .from("campaign_sellers")
+            .upsert(
+              {
+                campaign_id: c.campaign_id,
+                seller_id: id,
+                max_tickets: c.max_tickets,
+              },
+              { onConflict: "campaign_id,seller_id" },
+            );
+        } else {
+          // Unassign: delete the assignment
+          await supabase
+            .from("campaign_sellers")
+            .delete()
+            .eq("campaign_id", c.campaign_id)
+            .eq("seller_id", id);
+        }
       }
     }
 

@@ -5,18 +5,16 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { Profile } from "@/types/database";
 
-interface CampaignAssignment {
-  id: string;
+interface CampaignEntry {
   campaign_id: string;
+  campaign_name: string;
+  campaign_slug: string;
+  campaign_status: string;
+  assigned: boolean;
+  assignment_id: string | null;
   max_tickets: number | null;
-  assigned_at: string;
+  assigned_at: string | null;
   sold_count: number;
-  campaigns: {
-    id: string;
-    name: string;
-    slug: string;
-    status: string;
-  };
 }
 
 export default function SellerDetailPage() {
@@ -29,7 +27,7 @@ export default function SellerDetailPage() {
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const [assignments, setAssignments] = useState<CampaignAssignment[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignEntry[]>([]);
 
   const [sellerRole, setSellerRole] = useState<string>("seller");
   const [sellerCode, setSellerCode] = useState<string>("");
@@ -55,7 +53,7 @@ export default function SellerDetailPage() {
         setIsActive(s.is_active);
         setSellerRole(s.role);
         setSellerCode(s.seller_code || "");
-        setAssignments(data.assignments || []);
+        setCampaigns(data.campaigns || []);
         setPageLoading(false);
       } catch {
         setPageError("Error de conexión");
@@ -65,10 +63,18 @@ export default function SellerDetailPage() {
     fetchSeller();
   }, [id]);
 
+  function toggleCampaign(campaignId: string, assigned: boolean) {
+    setCampaigns((prev) =>
+      prev.map((c) =>
+        c.campaign_id === campaignId ? { ...c, assigned } : c,
+      ),
+    );
+  }
+
   function updateMaxTickets(campaignId: string, value: number | null) {
-    setAssignments((prev) =>
-      prev.map((a) =>
-        a.campaign_id === campaignId ? { ...a, max_tickets: value } : a,
+    setCampaigns((prev) =>
+      prev.map((c) =>
+        c.campaign_id === campaignId ? { ...c, max_tickets: value } : c,
       ),
     );
   }
@@ -85,9 +91,10 @@ export default function SellerDetailPage() {
       is_active: isActive,
     };
     if (newPassword) body.new_password = newPassword;
-    body.assignments = assignments.map((a) => ({
-      campaign_id: a.campaign_id,
-      max_tickets: a.max_tickets,
+    body.campaigns = campaigns.map((c) => ({
+      campaign_id: c.campaign_id,
+      assigned: c.assigned,
+      max_tickets: c.max_tickets,
     }));
 
     try {
@@ -262,108 +269,129 @@ export default function SellerDetailPage() {
         {/* Campaign assignments */}
         <div className="card space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
-            Campañas asignadas
+            Campañas
           </h3>
 
-          {assignments.length > 0 ? (
+          {campaigns.length > 0 ? (
             <div className="space-y-3">
-              {assignments.map((a) => {
-                const campaign = a.campaigns;
-                if (!campaign) return null;
-
-                const hasLimit = a.max_tickets !== null;
+              {campaigns.map((c) => {
+                const hasLimit = c.assigned && c.max_tickets !== null;
                 const progress = hasLimit
-                  ? Math.min((a.sold_count / a.max_tickets!) * 100, 100)
+                  ? Math.min((c.sold_count / c.max_tickets!) * 100, 100)
                   : 0;
-                const atLimit = hasLimit && a.sold_count >= a.max_tickets!;
+                const atLimit = hasLimit && c.sold_count >= c.max_tickets!;
 
                 return (
                   <div
-                    key={a.id}
-                    className="rounded-xl border border-navy-100 bg-white p-4"
+                    key={c.campaign_id}
+                    className={`rounded-xl border p-4 transition-all ${
+                      c.assigned
+                        ? "border-gold-200 bg-white"
+                        : "border-navy-100 bg-navy-50/50"
+                    }`}
                   >
-                    <div className="mb-2 flex items-center justify-between">
+                    {/* Campaign header with toggle */}
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-navy-700">
-                          {campaign.name}
+                        <p
+                          className={`font-semibold ${
+                            c.assigned ? "text-navy-700" : "text-navy-400"
+                          }`}
+                        >
+                          {c.campaign_name}
                         </p>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            campaign.status === "active"
+                            c.campaign_status === "active"
                               ? "bg-green-100 text-green-700"
-                              : campaign.status === "draft"
+                              : c.campaign_status === "draft"
                                 ? "bg-yellow-100 text-yellow-700"
                                 : "bg-gray-100 text-gray-700"
                           }`}
                         >
-                          {campaign.status === "active"
+                          {c.campaign_status === "active"
                             ? "Activa"
-                            : campaign.status === "draft"
+                            : c.campaign_status === "draft"
                               ? "Borrador"
                               : "Cerrada"}
                         </span>
                       </div>
-                    </div>
-
-                    {/* Sold count */}
-                    <div className="mb-2 text-sm text-navy-500">
-                      <span className="font-bold text-navy-700">
-                        {a.sold_count}
-                      </span>
-                      {hasLimit ? (
-                        <>
-                          {" "}
-                          / {a.max_tickets} vendidos
-                          {atLimit && (
-                            <span className="ml-2 font-semibold text-red-600">
-                              (Límite alcanzado)
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <> vendidos — Sin límite</>
-                      )}
-                    </div>
-
-                    {/* Progress bar */}
-                    {hasLimit && (
-                      <div className="mb-3 h-2 overflow-hidden rounded-full bg-navy-100">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            atLimit ? "bg-red-500" : "bg-gold-500"
-                          }`}
-                          style={{ width: `${progress}%` }}
+                      <span className="toggle-slider">
+                        <input
+                          type="checkbox"
+                          checked={c.assigned}
+                          onChange={(e) =>
+                            toggleCampaign(c.campaign_id, e.target.checked)
+                          }
                         />
+                        <span className="slider" />
+                      </span>
+                    </div>
+
+                    {/* Details shown only when assigned */}
+                    {c.assigned && (
+                      <div className="mt-3 space-y-2">
+                        {/* Sold count */}
+                        <div className="text-sm text-navy-500">
+                          <span className="font-bold text-navy-700">
+                            {c.sold_count}
+                          </span>
+                          {hasLimit ? (
+                            <>
+                              {" "}
+                              / {c.max_tickets} vendidos
+                              {atLimit && (
+                                <span className="ml-2 font-semibold text-red-600">
+                                  (Límite alcanzado)
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <> vendidos — Sin límite</>
+                          )}
+                        </div>
+
+                        {/* Progress bar */}
+                        {hasLimit && (
+                          <div className="h-2 overflow-hidden rounded-full bg-navy-100">
+                            <div
+                              className={`h-full rounded-full transition-all ${
+                                atLimit ? "bg-red-500" : "bg-gold-500"
+                              }`}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Max tickets input */}
+                        <div className="flex items-center gap-3">
+                          <label className="text-xs font-medium text-navy-500">
+                            Límite de ventas:
+                          </label>
+                          <input
+                            type="number"
+                            className="input-field w-28 !py-1.5 text-sm"
+                            placeholder="Sin límite"
+                            min={1}
+                            value={c.max_tickets ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateMaxTickets(
+                                c.campaign_id,
+                                val === "" ? null : parseInt(val, 10),
+                              );
+                            }}
+                          />
+                        </div>
                       </div>
                     )}
-
-                    {/* Max tickets input */}
-                    <div className="flex items-center gap-3">
-                      <label className="text-xs font-medium text-navy-500">
-                        Límite de ventas:
-                      </label>
-                      <input
-                        type="number"
-                        className="input-field w-28 !py-1.5 text-sm"
-                        placeholder="Sin límite"
-                        min={1}
-                        value={a.max_tickets ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          updateMaxTickets(
-                            a.campaign_id,
-                            val === "" ? null : parseInt(val, 10),
-                          );
-                        }}
-                      />
-                    </div>
                   </div>
                 );
               })}
             </div>
           ) : (
             <p className="py-4 text-center text-sm text-navy-400">
-              Sin campañas asignadas
+              No hay campañas creadas
             </p>
           )}
         </div>
