@@ -61,17 +61,37 @@ export default function SellerSellPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("seller_code")
+        .select("seller_code, role")
         .eq("id", user.id)
         .single();
 
-      if (!profile?.seller_code) {
-        setInitError("Perfil de vendedor no encontrado");
+      if (!profile) {
+        setInitError("Perfil no encontrado");
         setInitLoading(false);
         return;
       }
 
-      setSellerCode(profile.seller_code);
+      // If admin without seller_code, auto-generate one
+      if (!profile.seller_code && profile.role === "admin") {
+        const autoCode = "ADM-" + user.id.substring(0, 6).toUpperCase();
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({ seller_code: autoCode })
+          .eq("id", user.id);
+
+        if (updateError) {
+          setInitError("Error al generar codigo de vendedor");
+          setInitLoading(false);
+          return;
+        }
+        setSellerCode(autoCode);
+      } else if (!profile.seller_code) {
+        setInitError("Perfil de vendedor no encontrado");
+        setInitLoading(false);
+        return;
+      } else {
+        setSellerCode(profile.seller_code);
+      }
 
       // Get campaign info
       const { data: campaign } = await supabase

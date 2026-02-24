@@ -2,17 +2,29 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest) {
+  // Bail out gracefully if env vars are missing (avoids Edge Runtime crash)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>) {
+        setAll(
+          cookiesToSet: Array<{
+            name: string;
+            value: string;
+            options?: Record<string, unknown>;
+          }>,
+        ) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
@@ -22,42 +34,46 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
-    },
-  );
+    });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  // Protect admin and seller routes
-  const isProtectedRoute =
-    request.nextUrl.pathname.startsWith("/admin") ||
-    request.nextUrl.pathname.startsWith("/seller");
+    // Protect admin and seller routes
+    const isProtectedRoute =
+      request.nextUrl.pathname.startsWith("/admin") ||
+      request.nextUrl.pathname.startsWith("/seller");
 
-  if (isProtectedRoute && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirect", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
-  }
-
-  // Check must_change_password for protected routes
-  const isChangePasswordPage =
-    request.nextUrl.pathname === "/change-password";
-
-  if (user && isProtectedRoute && !isChangePasswordPage) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("must_change_password")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.must_change_password) {
+    if (isProtectedRoute && !user) {
       const url = request.nextUrl.clone();
-      url.pathname = "/change-password";
+      url.pathname = "/login";
+      url.searchParams.set("redirect", request.nextUrl.pathname);
       return NextResponse.redirect(url);
     }
-  }
 
-  return supabaseResponse;
+    // Check must_change_password for protected routes
+    const isChangePasswordPage =
+      request.nextUrl.pathname === "/change-password";
+
+    if (user && isProtectedRoute && !isChangePasswordPage) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("must_change_password")
+        .eq("id", user.id)
+        .single();
+
+      if (profile?.must_change_password) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/change-password";
+        return NextResponse.redirect(url);
+      }
+    }
+
+    return supabaseResponse;
+  } catch (e) {
+    // If middleware fails, let the request through rather than crashing
+    console.error("Middleware error:", e);
+    return NextResponse.next({ request });
+  }
 }

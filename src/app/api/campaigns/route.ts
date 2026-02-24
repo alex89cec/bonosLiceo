@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { campaignSchema } from "@/lib/validations";
 
+// Campaign creation triggers ticket generation on DB side.
+// Vercel serverless max duration (seconds). Free=10, Pro=60.
+export const maxDuration = 10;
+
 export async function POST(request: Request) {
   try {
     const supabase = await createServerSupabaseClient();
