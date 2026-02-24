@@ -61,8 +61,16 @@ export default function NewCampaignPage() {
     setLoading(true);
     setError(null);
 
-    const startISO = new Date(startDate).toISOString();
-    const endISO = new Date(endDate).toISOString();
+    let startISO: string;
+    let endISO: string;
+    try {
+      startISO = new Date(startDate).toISOString();
+      endISO = new Date(endDate).toISOString();
+    } catch {
+      setError("Fechas inválidas. Selecciona fechas válidas de inicio y fin.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/campaigns", {
@@ -85,17 +93,27 @@ export default function NewCampaignPage() {
         }),
       });
 
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        setError(
+          `Error del servidor (${res.status}). La creación puede tardar unos segundos — vuelve al listado y verifica.`,
+        );
+        setLoading(false);
+        return;
+      }
 
       if (!res.ok) {
-        setError(data.error || "Error al crear la campaña");
+        setError(data.error || `Error al crear la campaña (${res.status})`);
         setLoading(false);
         return;
       }
 
       router.push("/admin");
       router.refresh();
-    } catch {
+    } catch (err) {
+      console.error("Campaign creation error:", err);
       setError("Error de conexión. Intenta de nuevo.");
       setLoading(false);
     }

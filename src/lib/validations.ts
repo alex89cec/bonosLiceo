@@ -40,6 +40,10 @@ export const campaignSchema = z
   .refine((data) => data.number_to > data.number_from, {
     message: "El rango final debe ser mayor al rango inicial",
     path: ["number_to"],
+  })
+  .refine((data) => new Date(data.end_date) > new Date(data.start_date), {
+    message: "La fecha de fin debe ser posterior a la fecha de inicio",
+    path: ["end_date"],
   });
 
 export type ReserveTicketInput = z.infer<typeof reserveTicketSchema>;
