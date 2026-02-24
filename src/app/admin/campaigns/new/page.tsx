@@ -370,13 +370,7 @@ export default function NewCampaignPage() {
             Cuotas
           </h3>
 
-          <label className="flex cursor-pointer items-center gap-3">
-            <input
-              type="checkbox"
-              checked={installmentsEnabled}
-              onChange={(e) => setInstallmentsEnabled(e.target.checked)}
-              className="h-5 w-5 rounded border-navy-300 text-gold-500 focus:ring-gold-400"
-            />
+          <label className="flex cursor-pointer items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-navy-700">
                 Permitir pago en cuotas
@@ -385,6 +379,14 @@ export default function NewCampaignPage() {
                 Los vendedores podrán elegir venta en cuotas
               </p>
             </div>
+            <span className="toggle-slider">
+              <input
+                type="checkbox"
+                checked={installmentsEnabled}
+                onChange={(e) => setInstallmentsEnabled(e.target.checked)}
+              />
+              <span className="slider" />
+            </span>
           </label>
 
           {installmentsEnabled && (

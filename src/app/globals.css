@@ -62,4 +62,34 @@
   .ticket-number.taken {
     @apply cursor-not-allowed border-navy-100 bg-navy-50 text-navy-300 line-through opacity-60 hover:border-navy-100 hover:bg-navy-50 active:scale-100;
   }
+
+  /* Toggle slider — standard checkbox styled as a switch */
+  .toggle-slider {
+    @apply relative inline-block h-7 w-12 flex-shrink-0;
+  }
+
+  .toggle-slider input {
+    @apply sr-only;
+  }
+
+  .toggle-slider .slider {
+    @apply absolute inset-0 cursor-pointer rounded-full bg-navy-200 transition-colors duration-200;
+  }
+
+  .toggle-slider .slider::before {
+    content: "";
+    @apply absolute left-[2px] top-[2px] h-6 w-6 rounded-full bg-white shadow transition-transform duration-200;
+  }
+
+  .toggle-slider input:checked + .slider {
+    @apply bg-gold-500;
+  }
+
+  .toggle-slider input:checked + .slider::before {
+    transform: translateX(20px);
+  }
+
+  .toggle-slider input:focus-visible + .slider {
+    @apply ring-2 ring-gold-400 ring-offset-2;
+  }
 }
