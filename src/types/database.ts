@@ -97,6 +97,14 @@ export interface Installment {
   updated_at: string;
 }
 
+export interface CampaignSeller {
+  id: string;
+  campaign_id: string;
+  seller_id: string;
+  max_tickets: number | null;
+  assigned_at: string;
+}
+
 // RPC response types
 export interface ReserveTicketResponse {
   success: boolean;

@@ -38,7 +38,11 @@ export default async function AdminSellersPage() {
           </h3>
           <div className="space-y-3">
             {adminList.map((admin) => (
-              <div key={admin.id} className="card">
+              <Link
+                key={admin.id}
+                href={`/admin/sellers/${admin.id}`}
+                className="card block transition-all hover:border-gold-400 hover:bg-gold-50"
+              >
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -49,13 +53,16 @@ export default async function AdminSellersPage() {
                     </div>
                     <p className="text-sm text-gray-500">{admin.email}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="flex items-center gap-3">
                     <span className="rounded-lg bg-navy-50 px-3 py-1 font-mono text-sm font-semibold text-navy-600">
                       {admin.seller_code || "—"}
                     </span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -69,7 +76,11 @@ export default async function AdminSellersPage() {
       {sellerList.length > 0 ? (
         <div className="space-y-3">
           {sellerList.map((seller) => (
-            <div key={seller.id} className="card">
+            <Link
+              key={seller.id}
+              href={`/admin/sellers/${seller.id}`}
+              className="card block transition-all hover:border-gold-400 hover:bg-gold-50"
+            >
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -87,10 +98,13 @@ export default async function AdminSellersPage() {
                   </div>
                   <p className="text-sm text-gray-500">{seller.email}</p>
                 </div>
-                <div className="text-right">
+                <div className="flex items-center gap-3">
                   <span className="rounded-lg bg-navy-50 px-3 py-1 font-mono text-sm font-semibold text-navy-600">
                     {seller.seller_code}
                   </span>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-400">
@@ -100,7 +114,7 @@ export default async function AdminSellersPage() {
                 </span>
                 {seller.phone && <span>Tel: {seller.phone}</span>}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       ) : (

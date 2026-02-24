@@ -11,6 +11,7 @@ import type { PaymentMode } from "@/types/database";
 type Step = "select" | "buyer" | "confirm" | "success";
 
 interface CampaignInfo {
+  id: string;
   name: string;
   slug: string;
   ticket_price: number;
@@ -25,6 +26,8 @@ export default function SellerSellPage() {
   const [campaignInfo, setCampaignInfo] = useState<CampaignInfo | null>(null);
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
+  const [maxTickets, setMaxTickets] = useState<number | null>(null);
+  const [soldCount, setSoldCount] = useState(0);
 
   const [step, setStep] = useState<Step>("select");
   const [selectedNumber, setSelectedNumber] = useState<string | null>(null);
@@ -97,7 +100,7 @@ export default function SellerSellPage() {
       const { data: campaign } = await supabase
         .from("campaigns")
         .select(
-          "name, slug, ticket_price, installments_enabled, installments_count",
+          "id, name, slug, ticket_price, installments_enabled, installments_count",
         )
         .eq("slug", slug)
         .single();
@@ -109,6 +112,28 @@ export default function SellerSellPage() {
       }
 
       setCampaignInfo(campaign as CampaignInfo);
+
+      // Get seller quota for this campaign
+      const { data: assignment } = await supabase
+        .from("campaign_sellers")
+        .select("max_tickets")
+        .eq("seller_id", user.id)
+        .eq("campaign_id", campaign.id)
+        .single();
+
+      if (assignment?.max_tickets) {
+        setMaxTickets(assignment.max_tickets);
+      }
+
+      // Count seller's current reservations for this campaign
+      const { count } = await supabase
+        .from("reservations")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_id", user.id)
+        .eq("campaign_id", campaign.id)
+        .in("status", ["active", "confirmed"]);
+
+      setSoldCount(count || 0);
       setInitLoading(false);
     }
 
@@ -177,6 +202,26 @@ export default function SellerSellPage() {
             </span>
           </p>
         </div>
+
+        {/* Seller quota */}
+        {maxTickets !== null && (
+          <div
+            className={`mb-4 rounded-xl px-3 py-2 text-sm ${
+              soldCount >= maxTickets
+                ? "bg-red-50 text-red-700"
+                : "bg-navy-50 text-navy-600"
+            }`}
+          >
+            Cuota:{" "}
+            <span className="font-bold">{soldCount}</span> /{" "}
+            <span className="font-bold">{maxTickets}</span> vendidos
+            {soldCount >= maxTickets && (
+              <span className="ml-2 font-semibold">
+                — Limite alcanzado
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Search */}
         <div className="mb-4">
@@ -249,10 +294,12 @@ export default function SellerSellPage() {
         <div className="sticky bottom-0 bg-gray-50 pb-4 pt-2">
           <button
             className="btn-gold w-full"
-            disabled={!selectedNumber}
+            disabled={!selectedNumber || (maxTickets !== null && soldCount >= maxTickets)}
             onClick={() => setStep("buyer")}
           >
-            {selectedNumber
+            {maxTickets !== null && soldCount >= maxTickets
+              ? "Limite de ventas alcanzado"
+              : selectedNumber
               ? `Vender #${selectedNumber}`
               : "Selecciona un numero"}
           </button>
