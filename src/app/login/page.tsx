@@ -48,13 +48,10 @@ function LoginForm() {
         return;
       }
 
-      // If redirect was the default, route based on role
+      // If no explicit redirect, all users go to seller dashboard
+      // (admins access admin panel via the gear icon which sets ?redirect=/admin)
       if (!searchParams.get("redirect")) {
-        if (profile?.role === "admin") {
-          router.push("/admin");
-        } else {
-          router.push("/seller/dashboard");
-        }
+        router.push("/seller/dashboard");
         router.refresh();
         return;
       }

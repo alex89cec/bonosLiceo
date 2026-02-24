@@ -28,30 +28,50 @@ export default async function SellerDashboardPage() {
     sold: stats?.filter((t) => t.status === "sold").length || 0,
   };
 
-  // Get campaigns assigned to this seller
-  const { data: assignments } = await supabase
-    .from("campaign_sellers")
-    .select(
-      `
-      campaign_id,
-      campaigns:campaign_id (id, name, slug, status, ticket_price)
-    `,
-    )
-    .eq("seller_id", user.id);
+  // Get campaigns: admins see ALL active campaigns, sellers see only assigned ones
+  let campaigns: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+    ticket_price: number;
+  }[] = [];
 
-  const campaigns =
-    assignments
-      ?.map(
-        (a) =>
-          a.campaigns as unknown as {
-            id: string;
-            name: string;
-            slug: string;
-            status: string;
-            ticket_price: number;
-          },
+  if (profile.role === "admin") {
+    // Admins can sell from any campaign
+    const { data: allCampaigns } = await supabase
+      .from("campaigns")
+      .select("id, name, slug, status, ticket_price")
+      .in("status", ["active", "draft"])
+      .order("created_at", { ascending: false });
+
+    campaigns = allCampaigns || [];
+  } else {
+    // Sellers only see assigned campaigns
+    const { data: assignments } = await supabase
+      .from("campaign_sellers")
+      .select(
+        `
+        campaign_id,
+        campaigns:campaign_id (id, name, slug, status, ticket_price)
+      `,
       )
-      .filter(Boolean) || [];
+      .eq("seller_id", user.id);
+
+    campaigns =
+      assignments
+        ?.map(
+          (a) =>
+            a.campaigns as unknown as {
+              id: string;
+              name: string;
+              slug: string;
+              status: string;
+              ticket_price: number;
+            },
+        )
+        .filter(Boolean) || [];
+  }
 
   // Get recent reservations
   const { data: reservations } = await supabase

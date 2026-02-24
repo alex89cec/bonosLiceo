@@ -19,8 +19,8 @@ export default async function SellerLayout({
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "seller") {
-    redirect("/admin");
+  if (!profile || !["seller", "admin"].includes(profile.role)) {
+    redirect("/login");
   }
 
   return (
@@ -33,12 +33,22 @@ export default async function SellerLayout({
             </h1>
             <p className="text-xs text-navy-400">{profile.full_name}</p>
           </div>
-          <a
-            href="/seller/dashboard"
-            className="text-sm font-medium text-navy-600 hover:text-navy-800"
-          >
-            Inicio
-          </a>
+          <div className="flex items-center gap-3">
+            {profile.role === "admin" && (
+              <a
+                href="/admin"
+                className="text-sm font-medium text-navy-400 hover:text-navy-600"
+              >
+                Admin
+              </a>
+            )}
+            <a
+              href="/seller/dashboard"
+              className="text-sm font-medium text-navy-600 hover:text-navy-800"
+            >
+              Inicio
+            </a>
+          </div>
         </div>
       </nav>
       <main className="mx-auto max-w-md p-4">{children}</main>
