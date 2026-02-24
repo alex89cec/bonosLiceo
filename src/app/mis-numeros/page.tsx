@@ -48,7 +48,7 @@ export default function MisNumerosPage() {
 
       setResult(data.reservation);
     } catch {
-      setError("Error de conexion. Intenta de nuevo.");
+      setError("Error de conexión. Intenta de nuevo.");
     } finally {
       setLoading(false);
     }
@@ -175,7 +175,7 @@ export default function MisNumerosPage() {
           <div className="mt-6 overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
             {/* Ticket number header */}
             <div className="bg-navy-700 px-5 py-4 text-center">
-              <p className="text-sm text-navy-200">Numero</p>
+              <p className="text-sm text-navy-200">Número</p>
               <p className="font-mono text-4xl font-bold text-gold-400">
                 #{result.ticket_number}
               </p>
@@ -184,7 +184,7 @@ export default function MisNumerosPage() {
             {/* Details */}
             <div className="divide-y divide-navy-50 px-5">
               <div className="flex items-center justify-between py-3">
-                <span className="text-sm text-navy-400">Campana</span>
+                <span className="text-sm text-navy-400">Campaña</span>
                 <span className="text-sm font-semibold text-navy-700">
                   {result.campaign_name}
                 </span>

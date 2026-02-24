@@ -4,10 +4,10 @@ import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 const lookupSchema = z.object({
-  reservation_id: z.string().uuid("ID de reserva invalido"),
+  reservation_id: z.string().uuid("ID de reserva inválido"),
   buyer_email: z
     .string()
-    .email("Email invalido")
+    .email("Email inválido")
     .transform((v) => v.toLowerCase().trim()),
 });
 
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const ipLimit = rateLimit(`lookup:ip:${ip}`);
     if (!ipLimit.allowed) {
       return NextResponse.json(
-        { error: "Demasiados intentos. Intenta mas tarde." },
+        { error: "Demasiados intentos. Intenta más tarde." },
         { status: 429 },
       );
     }
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const parsed = lookupSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Datos invalidos", details: parsed.error.flatten() },
+        { error: "Datos inválidos", details: parsed.error.flatten() },
         { status: 400 },
       );
     }

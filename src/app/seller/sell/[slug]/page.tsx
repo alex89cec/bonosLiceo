@@ -11,6 +11,7 @@ import type { PaymentMode } from "@/types/database";
 type Step = "select" | "buyer" | "confirm" | "success";
 
 interface CampaignInfo {
+  id: string;
   name: string;
   slug: string;
   ticket_price: number;
@@ -25,6 +26,8 @@ export default function SellerSellPage() {
   const [campaignInfo, setCampaignInfo] = useState<CampaignInfo | null>(null);
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
+  const [maxTickets, setMaxTickets] = useState<number | null>(null);
+  const [soldCount, setSoldCount] = useState(0);
 
   const [step, setStep] = useState<Step>("select");
   const [selectedNumber, setSelectedNumber] = useState<string | null>(null);
@@ -80,7 +83,7 @@ export default function SellerSellPage() {
           .eq("id", user.id);
 
         if (updateError) {
-          setInitError("Error al generar codigo de vendedor");
+          setInitError("Error al generar código de vendedor");
           setInitLoading(false);
           return;
         }
@@ -97,7 +100,7 @@ export default function SellerSellPage() {
       const { data: campaign } = await supabase
         .from("campaigns")
         .select(
-          "name, slug, ticket_price, installments_enabled, installments_count",
+          "id, name, slug, ticket_price, installments_enabled, installments_count",
         )
         .eq("slug", slug)
         .single();
@@ -109,6 +112,28 @@ export default function SellerSellPage() {
       }
 
       setCampaignInfo(campaign as CampaignInfo);
+
+      // Get seller quota for this campaign
+      const { data: assignment } = await supabase
+        .from("campaign_sellers")
+        .select("max_tickets")
+        .eq("seller_id", user.id)
+        .eq("campaign_id", campaign.id)
+        .single();
+
+      if (assignment?.max_tickets) {
+        setMaxTickets(assignment.max_tickets);
+      }
+
+      // Count seller's current reservations for this campaign
+      const { count } = await supabase
+        .from("reservations")
+        .select("id", { count: "exact", head: true })
+        .eq("seller_id", user.id)
+        .eq("campaign_id", campaign.id)
+        .in("status", ["active", "confirmed"]);
+
+      setSoldCount(count || 0);
       setInitLoading(false);
     }
 
@@ -171,12 +196,32 @@ export default function SellerSellPage() {
             {campaignInfo?.name}
           </h2>
           <p className="text-sm text-navy-400">
-            Selecciona un numero para vender •{" "}
+            Selecciona un número para vender •{" "}
             <span className="font-semibold text-gold-600">
               ${campaignInfo?.ticket_price}
             </span>
           </p>
         </div>
+
+        {/* Seller quota */}
+        {maxTickets !== null && (
+          <div
+            className={`mb-4 rounded-xl px-3 py-2 text-sm ${
+              soldCount >= maxTickets
+                ? "bg-red-50 text-red-700"
+                : "bg-navy-50 text-navy-600"
+            }`}
+          >
+            Cuota:{" "}
+            <span className="font-bold">{soldCount}</span> /{" "}
+            <span className="font-bold">{maxTickets}</span> vendidos
+            {soldCount >= maxTickets && (
+              <span className="ml-2 font-semibold">
+                — Límite alcanzado
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Search */}
         <div className="mb-4">
@@ -249,12 +294,14 @@ export default function SellerSellPage() {
         <div className="sticky bottom-0 bg-gray-50 pb-4 pt-2">
           <button
             className="btn-gold w-full"
-            disabled={!selectedNumber}
+            disabled={!selectedNumber || (maxTickets !== null && soldCount >= maxTickets)}
             onClick={() => setStep("buyer")}
           >
-            {selectedNumber
+            {maxTickets !== null && soldCount >= maxTickets
+              ? "Límite de ventas alcanzado"
+              : selectedNumber
               ? `Vender #${selectedNumber}`
-              : "Selecciona un numero"}
+              : "Selecciona un número"}
           </button>
         </div>
       </div>
@@ -283,7 +330,7 @@ export default function SellerSellPage() {
               d="M15 19l-7-7 7-7"
             />
           </svg>
-          Cambiar numero
+          Cambiar número
         </button>
 
         <div className="mb-4">
@@ -291,7 +338,7 @@ export default function SellerSellPage() {
             Datos del comprador
           </h2>
           <p className="text-sm text-navy-400">
-            Numero seleccionado:{" "}
+            Número seleccionado:{" "}
             <span className="font-mono font-bold text-gold-600">
               #{selectedNumber}
             </span>
@@ -406,7 +453,7 @@ export default function SellerSellPage() {
         {/* Summary */}
         <div className="mb-4 overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
           <div className="bg-navy-700 px-5 py-4 text-center">
-            <p className="text-xs text-navy-300">Numero</p>
+            <p className="text-xs text-navy-300">Número</p>
             <p className="font-mono text-3xl font-bold text-gold-400">
               #{selectedNumber}
             </p>
@@ -537,7 +584,7 @@ export default function SellerSellPage() {
       {reservation && (
         <div className="mb-6 overflow-hidden rounded-2xl border border-navy-100 bg-white text-left shadow-sm">
           <div className="bg-navy-700 px-5 py-4 text-center">
-            <p className="text-xs text-navy-300">Numero</p>
+            <p className="text-xs text-navy-300">Número</p>
             <p className="font-mono text-4xl font-bold text-gold-400">
               #{reservation.ticket_number}
             </p>

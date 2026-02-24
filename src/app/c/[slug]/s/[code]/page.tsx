@@ -158,9 +158,9 @@ export default function PublicReservationPage() {
                   d="M15 19l-7-7 7-7"
                 />
               </svg>
-              Atras
+              Atrás
             </button>
-            <h1 className="text-xl font-bold text-white">Elige tu numero</h1>
+            <h1 className="text-xl font-bold text-white">Elige tu número</h1>
             <p className="text-sm text-navy-200">
               {availableCount} números disponibles
             </p>
@@ -240,7 +240,7 @@ export default function PublicReservationPage() {
             >
               {selectedNumber
                 ? `Reservar #${selectedNumber}`
-                : "Selecciona un numero"}
+                : "Selecciona un número"}
             </button>
           </div>
         </div>
@@ -273,7 +273,7 @@ export default function PublicReservationPage() {
                   d="M15 19l-7-7 7-7"
                 />
               </svg>
-              Cambiar numero
+              Cambiar número
             </button>
             <h1 className="text-xl font-bold text-white">Confirmar reserva</h1>
           </div>
@@ -283,7 +283,7 @@ export default function PublicReservationPage() {
           {/* Summary card */}
           <div className="mb-4 overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
             <div className="bg-navy-700 px-5 py-4 text-center">
-              <p className="text-xs text-navy-300">Tu numero</p>
+              <p className="text-xs text-navy-300">Tu número</p>
               <p className="font-mono text-3xl font-bold text-gold-400">
                 #{selectedNumber}
               </p>
@@ -378,7 +378,7 @@ export default function PublicReservationPage() {
         {reservation && (
           <div className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
             <div className="bg-navy-700 px-5 py-4 text-center">
-              <p className="text-xs text-navy-300">Tu numero</p>
+              <p className="text-xs text-navy-300">Tu número</p>
               <p className="font-mono text-4xl font-bold text-gold-400">
                 #{reservation.ticket_number}
               </p>
@@ -402,7 +402,7 @@ export default function PublicReservationPage() {
                 coordinar el pago.
               </p>
               <p className="mt-1 text-xs text-gold-600">
-                Se envio la informacion a {reservation.buyer_email}
+                Se envió la información a {reservation.buyer_email}
               </p>
             </div>
 
