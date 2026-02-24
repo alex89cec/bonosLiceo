@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import LogoutButton from "@/components/LogoutButton";
 
 export default async function SellerLayout({
   children,
@@ -48,6 +49,7 @@ export default async function SellerLayout({
             >
               Inicio
             </a>
+            <LogoutButton />
           </div>
         </div>
       </nav>

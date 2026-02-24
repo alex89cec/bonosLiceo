@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -15,15 +16,17 @@ interface ReservationResult {
   amount: number;
 }
 
-export default function MisNumerosPage() {
-  const [email, setEmail] = useState("");
-  const [reservationId, setReservationId] = useState("");
+function MisNumerosContent() {
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") || "");
+  const [reservationId, setReservationId] = useState(
+    searchParams.get("id") || "",
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReservationResult | null>(null);
 
-  async function handleLookup(e: React.FormEvent) {
-    e.preventDefault();
+  async function performLookup(lookupEmail: string, lookupId: string) {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -33,8 +36,8 @@ export default function MisNumerosPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          reservation_id: reservationId,
-          buyer_email: email,
+          reservation_id: lookupId,
+          buyer_email: lookupEmail,
         }),
       });
 
@@ -52,6 +55,21 @@ export default function MisNumerosPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Auto-lookup when coming from QR code
+  useEffect(() => {
+    const paramEmail = searchParams.get("email");
+    const paramId = searchParams.get("id");
+    if (paramEmail && paramId) {
+      performLookup(paramEmail, paramId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleLookup(e: React.FormEvent) {
+    e.preventDefault();
+    await performLookup(email, reservationId);
   }
 
   const statusLabels: Record<string, { text: string; color: string }> = {
@@ -235,5 +253,19 @@ export default function MisNumerosPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function MisNumerosPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold-200 border-t-gold-500" />
+        </div>
+      }
+    >
+      <MisNumerosContent />
+    </Suspense>
   );
 }

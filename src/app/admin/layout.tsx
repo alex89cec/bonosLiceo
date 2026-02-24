@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import LogoutButton from "@/components/LogoutButton";
 
 export default async function AdminLayout({
   children,
@@ -39,6 +40,7 @@ export default async function AdminLayout({
             <a href="/admin/reports" className="text-gray-600">
               Reportes
             </a>
+            <LogoutButton />
           </div>
         </div>
       </nav>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { createClient } from "@/lib/supabase/client";
 import { useAvailableTickets } from "@/hooks/useAvailableTickets";
 import { useReservation } from "@/hooks/useReservation";
@@ -37,6 +38,7 @@ export default function SellerSellPage() {
   const [buyerPhone, setBuyerPhone] = useState("");
   const [paymentMode, setPaymentMode] =
     useState<PaymentMode>("full_payment");
+  const [origin, setOrigin] = useState("");
 
   const { tickets, availableCount, loading: ticketsLoading, error: ticketsError, refetch } =
     useAvailableTickets(slug);
@@ -46,6 +48,11 @@ export default function SellerSellPage() {
     error: reserveError,
     reservation,
   } = useReservation();
+
+  // Set origin for QR code URL
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   // Fetch seller profile and campaign info on mount
   useEffect(() => {
@@ -583,6 +590,7 @@ export default function SellerSellPage() {
 
       {reservation && (
         <div className="mb-6 overflow-hidden rounded-2xl border border-navy-100 bg-white text-left shadow-sm">
+          {/* Ticket number header */}
           <div className="bg-navy-700 px-5 py-4 text-center">
             <p className="text-xs text-navy-300">Número</p>
             <p className="font-mono text-4xl font-bold text-gold-400">
@@ -593,6 +601,17 @@ export default function SellerSellPage() {
             </p>
           </div>
 
+          {/* Prominent reservation code */}
+          <div className="border-b border-navy-100 px-5 py-4 text-center">
+            <p className="text-xs font-medium uppercase tracking-wider text-navy-400">
+              Código de reserva
+            </p>
+            <p className="mt-1 select-all break-all font-mono text-sm font-bold text-navy-700">
+              {reservation.reservation_id}
+            </p>
+          </div>
+
+          {/* Details */}
           <div className="divide-y divide-navy-50 px-5">
             <div className="flex items-center justify-between py-3">
               <span className="text-sm text-navy-400">Comprador</span>
@@ -616,11 +635,24 @@ export default function SellerSellPage() {
             </div>
           </div>
 
-          <div className="px-5 pb-4 pt-2">
-            <p className="text-center text-xs text-navy-300">
-              ID: {reservation.reservation_id}
-            </p>
-          </div>
+          {/* QR Code */}
+          {origin && (
+            <div className="border-t border-navy-100 px-5 py-4 text-center">
+              <p className="mb-2 text-xs font-medium text-navy-400">
+                QR para consultar reserva
+              </p>
+              <div className="inline-block rounded-xl bg-white p-3 shadow-sm">
+                <QRCodeSVG
+                  value={`${origin}/mis-numeros?email=${encodeURIComponent(reservation.buyer_email)}&id=${encodeURIComponent(reservation.reservation_id)}`}
+                  size={160}
+                  level="M"
+                />
+              </div>
+              <p className="mt-2 text-xs text-navy-300">
+                El comprador puede escanear para ver su reserva
+              </p>
+            </div>
+          )}
         </div>
       )}
 

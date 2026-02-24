@@ -316,17 +316,36 @@ export default function SellerDetailPage() {
                               : "Cerrada"}
                         </span>
                       </div>
-                      <span className="toggle-slider">
-                        <input
-                          type="checkbox"
-                          checked={c.assigned}
-                          onChange={(e) =>
-                            toggleCampaign(c.campaign_id, e.target.checked)
-                          }
-                        />
-                        <span className="slider" />
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {c.assigned && c.sold_count > 0 && (
+                          <span
+                            className="text-xs text-navy-400"
+                            title="No se puede desasignar: tiene ventas activas"
+                          >
+                            🔒
+                          </span>
+                        )}
+                        <span className="toggle-slider">
+                          <input
+                            type="checkbox"
+                            checked={c.assigned}
+                            disabled={c.assigned && c.sold_count > 0}
+                            onChange={(e) =>
+                              toggleCampaign(c.campaign_id, e.target.checked)
+                            }
+                          />
+                          <span
+                            className={`slider ${c.assigned && c.sold_count > 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                          />
+                        </span>
+                      </div>
                     </div>
+                    {c.assigned && c.sold_count > 0 && (
+                      <p className="mt-1 text-right text-xs text-navy-400">
+                        No se puede desasignar (tiene {c.sold_count} venta
+                        {c.sold_count > 1 ? "s" : ""})
+                      </p>
+                    )}
 
                     {/* Details shown only when assigned */}
                     {c.assigned && (
