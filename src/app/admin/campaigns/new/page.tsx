@@ -370,7 +370,13 @@ export default function NewCampaignPage() {
             Cuotas
           </h3>
 
-          <div className="flex items-center justify-between">
+          <label className="flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={installmentsEnabled}
+              onChange={(e) => setInstallmentsEnabled(e.target.checked)}
+              className="h-5 w-5 rounded border-navy-300 text-gold-500 focus:ring-gold-400"
+            />
             <div>
               <p className="text-sm font-semibold text-navy-700">
                 Permitir pago en cuotas
@@ -379,24 +385,7 @@ export default function NewCampaignPage() {
                 Los vendedores podrán elegir venta en cuotas
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={installmentsEnabled}
-              onClick={() => setInstallmentsEnabled(!installmentsEnabled)}
-              className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-gold-400 focus:ring-offset-2 ${
-                installmentsEnabled ? "bg-gold-500" : "bg-navy-200"
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  installmentsEnabled
-                    ? "translate-x-[22px]"
-                    : "translate-x-[2px]"
-                } mt-[2px]`}
-              />
-            </button>
-          </div>
+          </label>
 
           {installmentsEnabled && (
             <div>
