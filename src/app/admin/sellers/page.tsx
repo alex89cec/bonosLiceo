@@ -4,12 +4,21 @@ import type { Profile } from "@/types/database";
 
 export default async function AdminSellersPage() {
   const supabase = await createServerSupabaseClient();
+
+  // Fetch both admins and sellers
+  const { data: admins } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "admin")
+    .order("full_name", { ascending: true });
+
   const { data: sellers } = await supabase
     .from("profiles")
     .select("*")
     .eq("role", "seller")
     .order("created_at", { ascending: false });
 
+  const adminList = (admins as Profile[] | null) ?? [];
   const sellerList = (sellers as Profile[] | null) ?? [];
 
   return (
@@ -20,6 +29,42 @@ export default async function AdminSellersPage() {
           + Nuevo vendedor
         </Link>
       </div>
+
+      {/* Admin users */}
+      {adminList.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-navy-400">
+            Administradores
+          </h3>
+          <div className="space-y-3">
+            {adminList.map((admin) => (
+              <div key={admin.id} className="card">
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{admin.full_name}</h3>
+                      <span className="rounded-full bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-600">
+                        Admin
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500">{admin.email}</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="rounded-lg bg-navy-50 px-3 py-1 font-mono text-sm font-semibold text-navy-600">
+                      {admin.seller_code || "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sellers section header */}
+      <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-navy-400">
+        Vendedores
+      </h3>
 
       {sellerList.length > 0 ? (
         <div className="space-y-3">

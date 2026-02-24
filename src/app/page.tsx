@@ -31,8 +31,8 @@ export default function HomePage() {
           Plataforma oficial de bonos contribucion
         </p>
 
-        {/* Two login cards */}
-        <div className="w-full max-w-sm space-y-4">
+        {/* Three access cards */}
+        <div className="w-full max-w-sm space-y-3">
           {/* Buyer access */}
           <Link
             href="/mis-numeros"
@@ -76,7 +76,7 @@ export default function HomePage() {
             </svg>
           </Link>
 
-          {/* Admin/Seller access */}
+          {/* Seller access */}
           <Link
             href="/login"
             className="flex w-full items-center gap-4 rounded-2xl border-2 border-navy-500/50 bg-white/5 p-5 backdrop-blur-sm transition-all hover:border-navy-400/60 hover:bg-white/10 active:scale-[0.98]"
@@ -93,14 +93,66 @@ export default function HomePage() {
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
                 />
               </svg>
             </div>
             <div>
-              <p className="text-lg font-bold text-white">Panel de Control</p>
+              <p className="text-lg font-bold text-white">
+                Portal Vendedores
+              </p>
               <p className="text-sm text-navy-300">
-                Administradores y vendedores
+                Ingresa como vendedor
+              </p>
+            </div>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="ml-auto h-5 w-5 text-navy-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </Link>
+
+          {/* Admin access */}
+          <Link
+            href="/login?redirect=/admin"
+            className="flex w-full items-center gap-4 rounded-2xl border-2 border-navy-500/50 bg-white/5 p-5 backdrop-blur-sm transition-all hover:border-navy-400/60 hover:bg-white/10 active:scale-[0.98]"
+          >
+            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl bg-navy-600">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-7 w-7 text-gold-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-white">
+                Portal Admin
+              </p>
+              <p className="text-sm text-navy-300">
+                Ingresa como administrador
               </p>
             </div>
             <svg
