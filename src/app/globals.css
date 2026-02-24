@@ -19,10 +19,16 @@
   /* Thumb-friendly touch targets */
   button,
   a,
-  input,
+  input:not(.sr-only):not([class*="sr-only"]),
   select,
   textarea {
     @apply min-h-touch min-w-touch;
+  }
+
+  /* Ensure sr-only inputs stay hidden (override touch targets) */
+  .toggle-slider input {
+    min-height: 1px !important;
+    min-width: 1px !important;
   }
 }
 
