@@ -260,7 +260,25 @@ export async function PUT(
               { onConflict: "campaign_id,seller_id" },
             );
         } else {
-          // Unassign: delete the assignment
+          // Before unassigning, check if seller has active/confirmed reservations
+          const { count: activeReservations } = await supabase
+            .from("reservations")
+            .select("id", { count: "exact", head: true })
+            .eq("seller_id", id)
+            .eq("campaign_id", c.campaign_id)
+            .in("status", ["active", "confirmed"]);
+
+          if (activeReservations && activeReservations > 0) {
+            return NextResponse.json(
+              {
+                error: `No se puede desasignar la campaña porque el vendedor tiene ${activeReservations} reserva(s) activa(s)`,
+                campaign_id: c.campaign_id,
+              },
+              { status: 409 },
+            );
+          }
+
+          // Safe to unassign
           await supabase
             .from("campaign_sellers")
             .delete()

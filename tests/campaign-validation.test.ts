@@ -181,6 +181,28 @@ describe("campaignSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts range of exactly 100,000 tickets (0 to 99999) and validates size", () => {
+    const result = campaignSchema.safeParse({
+      ...validCampaign,
+      number_from: 0,
+      number_to: 99999,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const rangeSize = result.data.number_to - result.data.number_from + 1;
+      expect(rangeSize).toBe(100000);
+    }
+  });
+
+  it("rejects number_to of 0", () => {
+    const result = campaignSchema.safeParse({
+      ...validCampaign,
+      number_from: 0,
+      number_to: 0,
+    });
+    expect(result.success).toBe(false);
+  });
+
   // --- Max tickets per buyer ---
   it("rejects zero max_tickets_per_buyer", () => {
     const result = campaignSchema.safeParse({

@@ -4,7 +4,7 @@ import { campaignSchema } from "@/lib/validations";
 
 // Campaign creation triggers ticket generation on DB side.
 // Vercel serverless max duration (seconds). Free=10, Pro=60.
-export const maxDuration = 10;
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -63,6 +63,12 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "El rango máximo es de 100,000 números por campaña" },
         { status: 400 },
+      );
+    }
+
+    if (rangeSize > 50000) {
+      console.warn(
+        `Large campaign creation: ${rangeSize} tickets for slug ${data.slug}`,
       );
     }
 

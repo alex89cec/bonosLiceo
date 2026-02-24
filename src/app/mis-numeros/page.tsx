@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -15,27 +16,31 @@ interface ReservationResult {
   amount: number;
 }
 
-export default function MisNumerosPage() {
-  const [email, setEmail] = useState("");
-  const [reservationId, setReservationId] = useState("");
+function MisNumerosContent() {
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get("email") || "");
+  const [reservationId, setReservationId] = useState(
+    searchParams.get("id") || "",
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReservationResult | null>(null);
+  const [results, setResults] = useState<ReservationResult[]>([]);
 
-  async function handleLookup(e: React.FormEvent) {
-    e.preventDefault();
+  async function performLookup(lookupEmail: string, lookupId?: string) {
     setLoading(true);
     setError(null);
     setResult(null);
+    setResults([]);
 
     try {
+      const body: Record<string, string> = { buyer_email: lookupEmail };
+      if (lookupId) body.reservation_id = lookupId;
+
       const res = await fetch("/api/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reservation_id: reservationId,
-          buyer_email: email,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -46,12 +51,40 @@ export default function MisNumerosPage() {
         return;
       }
 
-      setResult(data.reservation);
+      if (lookupId) {
+        // Single result (backward compatible)
+        setResult(data.reservation);
+      } else {
+        // Multi result (email-only)
+        const reservations = data.reservations || [];
+        if (reservations.length === 0) {
+          setError("No se encontraron bonos para este email");
+        } else {
+          setResults(reservations);
+        }
+      }
     } catch {
       setError("Error de conexión. Intenta de nuevo.");
     } finally {
       setLoading(false);
     }
+  }
+
+  // Auto-lookup when coming from QR code
+  useEffect(() => {
+    const paramEmail = searchParams.get("email");
+    const paramId = searchParams.get("id");
+    if (paramEmail && paramId) {
+      performLookup(paramEmail, paramId);
+    } else if (paramEmail) {
+      performLookup(paramEmail);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleLookup(e: React.FormEvent) {
+    e.preventDefault();
+    await performLookup(email, reservationId || undefined);
   }
 
   const statusLabels: Record<string, { text: string; color: string }> = {
@@ -65,6 +98,67 @@ export default function MisNumerosPage() {
     partial: { text: "Parcial", color: "bg-blue-100 text-blue-800" },
     completed: { text: "Pagado", color: "bg-green-100 text-green-800" },
   };
+
+  function renderReservationCard(r: ReservationResult) {
+    return (
+      <div
+        key={r.reservation_id}
+        className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm"
+      >
+        {/* Ticket number header */}
+        <div className="bg-navy-700 px-5 py-3 text-center">
+          <p className="font-mono text-2xl font-bold text-gold-400">
+            #{r.ticket_number}
+          </p>
+        </div>
+
+        {/* Details */}
+        <div className="divide-y divide-navy-50 px-5">
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-navy-400">Campaña</span>
+            <span className="text-sm font-semibold text-navy-700">
+              {r.campaign_name}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-navy-400">Estado</span>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${statusLabels[r.status]?.color || "bg-gray-100 text-gray-600"}`}
+            >
+              {statusLabels[r.status]?.text || r.status}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-navy-400">Pago</span>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${paymentLabels[r.payment_status]?.color || "bg-gray-100 text-gray-600"}`}
+            >
+              {paymentLabels[r.payment_status]?.text || r.payment_status}
+            </span>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-navy-400">Monto</span>
+            <span className="text-sm font-bold text-navy-700">${r.amount}</span>
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <span className="text-sm text-navy-400">Modo</span>
+            <span className="text-sm text-navy-600">
+              {r.payment_mode === "full_payment" ? "Pago completo" : "Cuotas"}
+            </span>
+          </div>
+        </div>
+
+        {/* Warning if pending */}
+        {r.payment_status === "pending" && r.status === "active" && (
+          <div className="mx-5 mb-4 mt-2 rounded-xl bg-gold-50 p-3">
+            <p className="text-sm font-medium text-gold-800">
+              Contacta al vendedor para completar el pago.
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50">
@@ -103,7 +197,7 @@ export default function MisNumerosPage() {
           </div>
           <h1 className="mt-3 text-xl font-bold text-white">Mis Bonos</h1>
           <p className="text-sm text-navy-200">
-            Consulta el estado de tu bono
+            Consulta el estado de tus bonos
           </p>
         </div>
       </div>
@@ -136,19 +230,19 @@ export default function MisNumerosPage() {
               htmlFor="reservationId"
               className="mb-1.5 block text-sm font-semibold text-navy-700"
             >
-              ID de reserva
+              ID de reserva{" "}
+              <span className="font-normal text-navy-300">(opcional)</span>
             </label>
             <input
               id="reservationId"
               type="text"
               className="input-field font-mono"
-              placeholder="ej: abc123-def456-..."
+              placeholder="Dejar vacío para ver todos tus bonos"
               value={reservationId}
               onChange={(e) => setReservationId(e.target.value)}
-              required
             />
             <p className="mt-1 text-xs text-navy-400">
-              Lo recibiste al momento de reservar
+              Sin ID, mostramos todos los bonos de tu email
             </p>
           </div>
 
@@ -158,82 +252,61 @@ export default function MisNumerosPage() {
             </div>
           )}
 
-          <button className="btn-gold w-full" disabled={loading || !email || !reservationId}>
+          <button className="btn-gold w-full" disabled={loading || !email}>
             {loading ? (
               <span className="flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
                 Buscando...
               </span>
-            ) : (
+            ) : reservationId ? (
               "Consultar reserva"
+            ) : (
+              "Ver mis bonos"
             )}
           </button>
         </form>
 
-        {/* Result */}
-        {result && (
-          <div className="mt-6 overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
-            {/* Ticket number header */}
-            <div className="bg-navy-700 px-5 py-4 text-center">
-              <p className="text-sm text-navy-200">Número</p>
-              <p className="font-mono text-4xl font-bold text-gold-400">
-                #{result.ticket_number}
+        {/* Single result */}
+        {result && <div className="mt-6">{renderReservationCard(result)}</div>}
+
+        {/* Multi results */}
+        {results.length > 0 && (
+          <div className="mt-6 space-y-4">
+            <div className="text-center">
+              <p className="text-sm font-semibold text-navy-700">
+                {results.length} bono{results.length !== 1 ? "s" : ""}{" "}
+                encontrado{results.length !== 1 ? "s" : ""}
               </p>
             </div>
 
-            {/* Details */}
-            <div className="divide-y divide-navy-50 px-5">
-              <div className="flex items-center justify-between py-3">
-                <span className="text-sm text-navy-400">Campaña</span>
-                <span className="text-sm font-semibold text-navy-700">
-                  {result.campaign_name}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-3">
-                <span className="text-sm text-navy-400">Estado</span>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${statusLabels[result.status]?.color || "bg-gray-100 text-gray-600"}`}
-                >
-                  {statusLabels[result.status]?.text || result.status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-3">
-                <span className="text-sm text-navy-400">Pago</span>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${paymentLabels[result.payment_status]?.color || "bg-gray-100 text-gray-600"}`}
-                >
-                  {paymentLabels[result.payment_status]?.text ||
-                    result.payment_status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-3">
-                <span className="text-sm text-navy-400">Monto</span>
-                <span className="text-sm font-bold text-navy-700">
-                  ${result.amount}
-                </span>
-              </div>
-              <div className="flex items-center justify-between py-3">
-                <span className="text-sm text-navy-400">Modo</span>
-                <span className="text-sm text-navy-600">
-                  {result.payment_mode === "full_payment"
-                    ? "Pago completo"
-                    : "Cuotas"}
-                </span>
-              </div>
-            </div>
+            {results.map((r) => renderReservationCard(r))}
 
-            {/* Warning if pending */}
-            {result.payment_status === "pending" &&
-              result.status === "active" && (
-                <div className="mx-5 mb-4 mt-2 rounded-xl bg-gold-50 p-3">
-                  <p className="text-sm font-medium text-gold-800">
-                    Contacta al vendedor para completar el pago.
-                  </p>
-                </div>
-              )}
+            {/* Total summary */}
+            {results.length > 1 && (
+              <div className="rounded-xl bg-navy-50 p-4 text-center">
+                <p className="text-sm text-navy-500">Total</p>
+                <p className="text-2xl font-bold text-navy-700">
+                  ${results.reduce((sum, r) => sum + r.amount, 0)}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
     </main>
+  );
+}
+
+export default function MisNumerosPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold-200 border-t-gold-500" />
+        </div>
+      }
+    >
+      <MisNumerosContent />
+    </Suspense>
   );
 }
