@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bonos Contribucion",
-  description: "Plataforma de bonos contribucion del Liceo",
+  title: "Bonos Contribución",
+  description: "Plataforma de bonos contribución del Liceo",
   manifest: "/manifest.json",
 };
 

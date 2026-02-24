@@ -83,7 +83,7 @@ export default function SellerSellPage() {
           .eq("id", user.id);
 
         if (updateError) {
-          setInitError("Error al generar codigo de vendedor");
+          setInitError("Error al generar código de vendedor");
           setInitLoading(false);
           return;
         }
@@ -196,7 +196,7 @@ export default function SellerSellPage() {
             {campaignInfo?.name}
           </h2>
           <p className="text-sm text-navy-400">
-            Selecciona un numero para vender •{" "}
+            Selecciona un número para vender •{" "}
             <span className="font-semibold text-gold-600">
               ${campaignInfo?.ticket_price}
             </span>
@@ -217,7 +217,7 @@ export default function SellerSellPage() {
             <span className="font-bold">{maxTickets}</span> vendidos
             {soldCount >= maxTickets && (
               <span className="ml-2 font-semibold">
-                — Limite alcanzado
+                — Límite alcanzado
               </span>
             )}
           </div>
@@ -298,10 +298,10 @@ export default function SellerSellPage() {
             onClick={() => setStep("buyer")}
           >
             {maxTickets !== null && soldCount >= maxTickets
-              ? "Limite de ventas alcanzado"
+              ? "Límite de ventas alcanzado"
               : selectedNumber
               ? `Vender #${selectedNumber}`
-              : "Selecciona un numero"}
+              : "Selecciona un número"}
           </button>
         </div>
       </div>
@@ -330,7 +330,7 @@ export default function SellerSellPage() {
               d="M15 19l-7-7 7-7"
             />
           </svg>
-          Cambiar numero
+          Cambiar número
         </button>
 
         <div className="mb-4">
@@ -338,7 +338,7 @@ export default function SellerSellPage() {
             Datos del comprador
           </h2>
           <p className="text-sm text-navy-400">
-            Numero seleccionado:{" "}
+            Número seleccionado:{" "}
             <span className="font-mono font-bold text-gold-600">
               #{selectedNumber}
             </span>
@@ -453,7 +453,7 @@ export default function SellerSellPage() {
         {/* Summary */}
         <div className="mb-4 overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
           <div className="bg-navy-700 px-5 py-4 text-center">
-            <p className="text-xs text-navy-300">Numero</p>
+            <p className="text-xs text-navy-300">Número</p>
             <p className="font-mono text-3xl font-bold text-gold-400">
               #{selectedNumber}
             </p>
@@ -584,7 +584,7 @@ export default function SellerSellPage() {
       {reservation && (
         <div className="mb-6 overflow-hidden rounded-2xl border border-navy-100 bg-white text-left shadow-sm">
           <div className="bg-navy-700 px-5 py-4 text-center">
-            <p className="text-xs text-navy-300">Numero</p>
+            <p className="text-xs text-navy-300">Número</p>
             <p className="font-mono text-4xl font-bold text-gold-400">
               #{reservation.ticket_number}
             </p>

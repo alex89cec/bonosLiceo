@@ -1,7 +1,7 @@
 {
-  "name": "Bonos Contribucion",
+  "name": "Bonos Contribución",
   "short_name": "Bonos",
-  "description": "Plataforma de bonos contribucion del Liceo",
+  "description": "Plataforma de bonos contribución del Liceo",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

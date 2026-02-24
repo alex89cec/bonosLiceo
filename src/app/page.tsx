@@ -25,10 +25,10 @@ export default function HomePage() {
 
         {/* Title */}
         <h1 className="mb-2 text-center text-3xl font-bold text-white">
-          Bonos Contribucion
+          Bonos Contribución
         </h1>
         <p className="mb-10 text-center text-base text-navy-200">
-          Plataforma oficial de bonos contribucion
+          Plataforma oficial de bonos contribución
         </p>
 
         {/* Three access cards */}
@@ -176,7 +176,7 @@ export default function HomePage() {
       {/* Footer */}
       <div className="bg-navy-800 px-6 py-4 text-center">
         <p className="text-xs text-navy-400">
-          CEC Liceo Militar General San Martin
+          CEC Liceo Militar General San Martín
         </p>
       </div>
     </main>

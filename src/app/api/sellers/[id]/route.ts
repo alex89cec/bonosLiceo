@@ -146,7 +146,7 @@ export async function PUT(
     if (!parsed.success) {
       return NextResponse.json(
         {
-          error: "Datos invalidos",
+          error: "Datos inválidos",
           details: parsed.error.flatten().fieldErrors,
         },
         { status: 400 },
@@ -214,7 +214,7 @@ export async function PUT(
       if (pwError) {
         console.error("Auth password update error:", pwError);
         return NextResponse.json(
-          { error: "Error al actualizar la contrasena" },
+          { error: "Error al actualizar la contraseña" },
           { status: 500 },
         );
       }

@@ -58,7 +58,7 @@ export default function SellerDetailPage() {
         setAssignments(data.assignments || []);
         setPageLoading(false);
       } catch {
-        setPageError("Error de conexion");
+        setPageError("Error de conexión");
         setPageLoading(false);
       }
     }
@@ -106,7 +106,7 @@ export default function SellerDetailPage() {
       setNewPassword("");
       setLoading(false);
     } catch {
-      setError("Error de conexion");
+      setError("Error de conexión");
       setLoading(false);
     }
   }
@@ -221,7 +221,7 @@ export default function SellerDetailPage() {
               htmlFor="newPassword"
               className="mb-1.5 block text-sm font-semibold text-navy-700"
             >
-              Nueva contrasena
+              Nueva contraseña
             </label>
             <input
               id="newPassword"
@@ -233,7 +233,7 @@ export default function SellerDetailPage() {
               minLength={8}
             />
             <p className="mt-1 text-xs text-navy-400">
-              Minimo 8 caracteres. Solo completar si desea cambiar la contrasena.
+              Mínimo 8 caracteres. Solo completar si desea cambiar la contraseña.
             </p>
           </div>
 
@@ -244,7 +244,7 @@ export default function SellerDetailPage() {
                   Usuario activo
                 </p>
                 <p className="text-xs text-navy-400">
-                  Los usuarios inactivos no pueden iniciar sesion ni vender
+                  Los usuarios inactivos no pueden iniciar sesión ni vender
                 </p>
               </div>
               <span className="toggle-slider">
@@ -262,7 +262,7 @@ export default function SellerDetailPage() {
         {/* Campaign assignments */}
         <div className="card space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
-            Campanas asignadas
+            Campañas asignadas
           </h3>
 
           {assignments.length > 0 ? (
@@ -316,12 +316,12 @@ export default function SellerDetailPage() {
                           / {a.max_tickets} vendidos
                           {atLimit && (
                             <span className="ml-2 font-semibold text-red-600">
-                              (Limite alcanzado)
+                              (Límite alcanzado)
                             </span>
                           )}
                         </>
                       ) : (
-                        <> vendidos — Sin limite</>
+                        <> vendidos — Sin límite</>
                       )}
                     </div>
 
@@ -340,12 +340,12 @@ export default function SellerDetailPage() {
                     {/* Max tickets input */}
                     <div className="flex items-center gap-3">
                       <label className="text-xs font-medium text-navy-500">
-                        Limite de ventas:
+                        Límite de ventas:
                       </label>
                       <input
                         type="number"
                         className="input-field w-28 !py-1.5 text-sm"
-                        placeholder="Sin limite"
+                        placeholder="Sin límite"
                         min={1}
                         value={a.max_tickets ?? ""}
                         onChange={(e) => {
@@ -363,7 +363,7 @@ export default function SellerDetailPage() {
             </div>
           ) : (
             <p className="py-4 text-center text-sm text-navy-400">
-              Sin campanas asignadas
+              Sin campañas asignadas
             </p>
           )}
         </div>
