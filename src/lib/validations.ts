@@ -46,5 +46,16 @@ export const campaignSchema = z
     path: ["end_date"],
   });
 
+export const reserveBatchSchema = z.object({
+  campaign_slug: z.string().min(1),
+  seller_code: z.string().min(1),
+  buyer_email: emailSchema,
+  ticket_numbers: z.array(ticketNumberSchema).min(1).max(50),
+  payment_mode: z.enum(["full_payment", "installments"]).optional(),
+  buyer_name: z.string().optional(),
+  buyer_phone: z.string().optional(),
+});
+
 export type ReserveTicketInput = z.infer<typeof reserveTicketSchema>;
+export type ReserveBatchInput = z.infer<typeof reserveBatchSchema>;
 export type CampaignInput = z.infer<typeof campaignSchema>;

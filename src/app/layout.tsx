@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "Bonos Contribución",
   description: "Plataforma de bonos contribución del Liceo",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

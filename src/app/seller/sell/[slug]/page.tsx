@@ -31,7 +31,7 @@ export default function SellerSellPage() {
   const [soldCount, setSoldCount] = useState(0);
 
   const [step, setStep] = useState<Step>("select");
-  const [selectedNumber, setSelectedNumber] = useState<string | null>(null);
+  const [selectedNumbers, setSelectedNumbers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [buyerName, setBuyerName] = useState("");
@@ -40,13 +40,21 @@ export default function SellerSellPage() {
     useState<PaymentMode>("full_payment");
   const [origin, setOrigin] = useState("");
 
-  const { tickets, availableCount, loading: ticketsLoading, error: ticketsError, refetch } =
-    useAvailableTickets(slug);
+  const {
+    tickets,
+    availableCount,
+    loading: ticketsLoading,
+    error: ticketsError,
+    refetch,
+  } = useAvailableTickets(slug);
   const {
     reserve,
+    reserveBatch,
     loading: reserving,
     error: reserveError,
     reservation,
+    batchResults,
+    batchErrors,
   } = useReservation();
 
   // Set origin for QR code URL
@@ -152,6 +160,20 @@ export default function SellerSellPage() {
     return tickets.filter((t) => t.number.includes(searchQuery));
   }, [tickets, searchQuery]);
 
+  const remainingQuota =
+    maxTickets !== null ? maxTickets - soldCount : Infinity;
+  const canSelectMore = selectedNumbers.length < remainingQuota;
+
+  function toggleNumber(number: string) {
+    setSelectedNumbers((prev) =>
+      prev.includes(number)
+        ? prev.filter((n) => n !== number)
+        : canSelectMore
+          ? [...prev, number]
+          : prev,
+    );
+  }
+
   // Loading state
   if (initLoading) {
     return (
@@ -173,7 +195,7 @@ export default function SellerSellPage() {
     );
   }
 
-  // Step 1: Select number
+  // Step 1: Select numbers
   if (step === "select") {
     return (
       <div>
@@ -203,9 +225,9 @@ export default function SellerSellPage() {
             {campaignInfo?.name}
           </h2>
           <p className="text-sm text-navy-400">
-            Selecciona un número para vender •{" "}
+            Selecciona números para vender •{" "}
             <span className="font-semibold text-gold-600">
-              ${campaignInfo?.ticket_price}
+              ${campaignInfo?.ticket_price} c/u
             </span>
           </p>
         </div>
@@ -223,10 +245,30 @@ export default function SellerSellPage() {
             <span className="font-bold">{soldCount}</span> /{" "}
             <span className="font-bold">{maxTickets}</span> vendidos
             {soldCount >= maxTickets && (
-              <span className="ml-2 font-semibold">
-                — Límite alcanzado
+              <span className="ml-2 font-semibold">— Límite alcanzado</span>
+            )}
+          </div>
+        )}
+
+        {/* Selection info */}
+        {selectedNumbers.length > 0 && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="rounded-full bg-gold-100 px-3 py-1 text-sm font-semibold text-gold-800">
+              {selectedNumbers.length} seleccionado
+              {selectedNumbers.length !== 1 ? "s" : ""}
+            </span>
+            {selectedNumbers.length > 1 && (
+              <span className="text-xs text-navy-400">
+                Total: $
+                {(campaignInfo?.ticket_price || 0) * selectedNumbers.length}
               </span>
             )}
+            <button
+              className="ml-auto text-sm text-navy-400 hover:text-red-500"
+              onClick={() => setSelectedNumbers([])}
+            >
+              Limpiar
+            </button>
           </div>
         )}
 
@@ -271,14 +313,20 @@ export default function SellerSellPage() {
           <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
             {filteredTickets.slice(0, 100).map((ticket) => {
               const isTaken = ticket.status !== "available";
+              const isSelected = selectedNumbers.includes(ticket.number);
               return (
                 <button
                   key={ticket.number}
-                  className={`ticket-number ${selectedNumber === ticket.number ? "selected" : ""} ${isTaken ? "taken" : ""}`}
-                  onClick={() => !isTaken && setSelectedNumber(ticket.number)}
+                  className={`ticket-number relative ${isSelected ? "selected" : ""} ${isTaken ? "taken" : ""}`}
+                  onClick={() => !isTaken && toggleNumber(ticket.number)}
                   disabled={isTaken}
                 >
                   {ticket.number}
+                  {isSelected && (
+                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gold-500 text-[10px] font-bold text-white shadow-sm">
+                      ✓
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -301,14 +349,17 @@ export default function SellerSellPage() {
         <div className="sticky bottom-0 bg-gray-50 pb-4 pt-2">
           <button
             className="btn-gold w-full"
-            disabled={!selectedNumber || (maxTickets !== null && soldCount >= maxTickets)}
+            disabled={
+              selectedNumbers.length === 0 ||
+              (maxTickets !== null && soldCount >= maxTickets)
+            }
             onClick={() => setStep("buyer")}
           >
             {maxTickets !== null && soldCount >= maxTickets
               ? "Límite de ventas alcanzado"
-              : selectedNumber
-              ? `Vender #${selectedNumber}`
-              : "Selecciona un número"}
+              : selectedNumbers.length > 0
+                ? `Vender ${selectedNumbers.length} número${selectedNumbers.length !== 1 ? "s" : ""}`
+                : "Selecciona números"}
           </button>
         </div>
       </div>
@@ -337,7 +388,7 @@ export default function SellerSellPage() {
               d="M15 19l-7-7 7-7"
             />
           </svg>
-          Cambiar número
+          Cambiar selección
         </button>
 
         <div className="mb-4">
@@ -345,9 +396,11 @@ export default function SellerSellPage() {
             Datos del comprador
           </h2>
           <p className="text-sm text-navy-400">
-            Número seleccionado:{" "}
+            {selectedNumbers.length} número
+            {selectedNumbers.length !== 1 ? "s" : ""} seleccionado
+            {selectedNumbers.length !== 1 ? "s" : ""}:{" "}
             <span className="font-mono font-bold text-gold-600">
-              #{selectedNumber}
+              {selectedNumbers.map((n) => `#${n}`).join(", ")}
             </span>
           </p>
         </div>
@@ -430,6 +483,9 @@ export default function SellerSellPage() {
 
   // Step 3: Confirm
   if (step === "confirm") {
+    const totalAmount =
+      (campaignInfo?.ticket_price || 0) * selectedNumbers.length;
+
     return (
       <div>
         <button
@@ -460,10 +516,20 @@ export default function SellerSellPage() {
         {/* Summary */}
         <div className="mb-4 overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-sm">
           <div className="bg-navy-700 px-5 py-4 text-center">
-            <p className="text-xs text-navy-300">Número</p>
-            <p className="font-mono text-3xl font-bold text-gold-400">
-              #{selectedNumber}
+            <p className="text-xs text-navy-300">
+              {selectedNumbers.length} Número
+              {selectedNumbers.length !== 1 ? "s" : ""}
             </p>
+            <div className="flex flex-wrap justify-center gap-2 py-2">
+              {selectedNumbers.map((n) => (
+                <span
+                  key={n}
+                  className="font-mono text-lg font-bold text-gold-400"
+                >
+                  #{n}
+                </span>
+              ))}
+            </div>
           </div>
           <div className="divide-y divide-navy-50 px-5">
             <div className="flex items-center justify-between py-3">
@@ -481,9 +547,14 @@ export default function SellerSellPage() {
               </div>
             )}
             <div className="flex items-center justify-between py-3">
-              <span className="text-sm text-navy-400">Monto</span>
+              <span className="text-sm text-navy-400">Monto total</span>
               <span className="text-lg font-bold text-navy-700">
-                ${campaignInfo?.ticket_price}
+                ${totalAmount}
+                {selectedNumbers.length > 1 && (
+                  <span className="ml-1 text-xs font-normal text-navy-400">
+                    ({selectedNumbers.length} × ${campaignInfo?.ticket_price})
+                  </span>
+                )}
               </span>
             </div>
           </div>
@@ -534,18 +605,35 @@ export default function SellerSellPage() {
           className="btn-gold w-full"
           disabled={reserving}
           onClick={async () => {
-            const result = await reserve({
-              campaignSlug: slug,
-              sellerCode,
-              buyerEmail,
-              ticketNumber: selectedNumber!,
-              paymentMode: campaignInfo?.installments_enabled
-                ? paymentMode
-                : "full_payment",
-              buyerName: buyerName || undefined,
-              buyerPhone: buyerPhone || undefined,
-            });
-            if (result) setStep("success");
+            const pm = campaignInfo?.installments_enabled
+              ? paymentMode
+              : "full_payment";
+
+            if (selectedNumbers.length === 1) {
+              // Single ticket — use original endpoint
+              const result = await reserve({
+                campaignSlug: slug,
+                sellerCode,
+                buyerEmail,
+                ticketNumber: selectedNumbers[0],
+                paymentMode: pm,
+                buyerName: buyerName || undefined,
+                buyerPhone: buyerPhone || undefined,
+              });
+              if (result) setStep("success");
+            } else {
+              // Multiple tickets — use batch endpoint
+              const { results } = await reserveBatch({
+                campaignSlug: slug,
+                sellerCode,
+                buyerEmail,
+                ticketNumbers: selectedNumbers,
+                paymentMode: pm,
+                buyerName: buyerName || undefined,
+                buyerPhone: buyerPhone || undefined,
+              });
+              if (results.length > 0) setStep("success");
+            }
           }}
         >
           {reserving ? (
@@ -562,6 +650,13 @@ export default function SellerSellPage() {
   }
 
   // Success
+  const successResults =
+    batchResults.length > 0
+      ? batchResults
+      : reservation
+        ? [reservation]
+        : [];
+
   return (
     <div className="py-8 text-center">
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
@@ -582,32 +677,52 @@ export default function SellerSellPage() {
       </div>
 
       <h2 className="mb-1 text-xl font-bold text-navy-700">
-        Venta registrada
+        {successResults.length === 1
+          ? "Venta registrada"
+          : `${successResults.length} ventas registradas`}
       </h2>
       <p className="mb-6 text-sm text-navy-400">
-        El bono fue asignado correctamente
+        {successResults.length === 1
+          ? "El bono fue asignado correctamente"
+          : "Los bonos fueron asignados correctamente"}
       </p>
 
-      {reservation && (
-        <div className="mb-6 overflow-hidden rounded-2xl border border-navy-100 bg-white text-left shadow-sm">
-          {/* Ticket number header */}
-          <div className="bg-navy-700 px-5 py-4 text-center">
-            <p className="text-xs text-navy-300">Número</p>
-            <p className="font-mono text-4xl font-bold text-gold-400">
-              #{reservation.ticket_number}
+      {/* Partial failure warning */}
+      {batchErrors.length > 0 && (
+        <div className="mb-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-left">
+          <p className="mb-2 text-sm font-semibold text-yellow-800">
+            {batchErrors.length} número
+            {batchErrors.length !== 1 ? "s" : ""} no se pudieron reservar:
+          </p>
+          {batchErrors.map((e) => (
+            <p key={e.ticket_number} className="text-sm text-yellow-700">
+              #{e.ticket_number}: {e.error}
             </p>
-            <p className="mt-1 text-sm text-navy-200">
-              {reservation.campaign_name}
-            </p>
-          </div>
+          ))}
+        </div>
+      )}
 
-          {/* Prominent reservation code */}
-          <div className="border-b border-navy-100 px-5 py-4 text-center">
-            <p className="text-xs font-medium uppercase tracking-wider text-navy-400">
-              Código de reserva
+      {successResults.length > 0 && (
+        <div className="mb-6 overflow-hidden rounded-2xl border border-navy-100 bg-white text-left shadow-sm">
+          {/* Ticket numbers header */}
+          <div className="bg-navy-700 px-5 py-4 text-center">
+            <p className="text-xs text-navy-300">
+              {successResults.length === 1
+                ? "Número"
+                : `${successResults.length} Números`}
             </p>
-            <p className="mt-1 select-all break-all font-mono text-sm font-bold text-navy-700">
-              {reservation.reservation_id}
+            <div className="flex flex-wrap justify-center gap-3 py-2">
+              {successResults.map((r) => (
+                <span
+                  key={r.reservation_id}
+                  className="font-mono text-2xl font-bold text-gold-400"
+                >
+                  #{r.ticket_number}
+                </span>
+              ))}
+            </div>
+            <p className="mt-1 text-sm text-navy-200">
+              {successResults[0].campaign_name}
             </p>
           </div>
 
@@ -616,40 +731,64 @@ export default function SellerSellPage() {
             <div className="flex items-center justify-between py-3">
               <span className="text-sm text-navy-400">Comprador</span>
               <span className="text-sm font-medium text-navy-700">
-                {reservation.buyer_email}
+                {successResults[0].buyer_email}
               </span>
             </div>
             <div className="flex items-center justify-between py-3">
               <span className="text-sm text-navy-400">Modo</span>
               <span className="text-sm font-medium text-navy-700">
-                {reservation.payment_mode === "full_payment"
+                {successResults[0].payment_mode === "full_payment"
                   ? "Pago completo"
-                  : `${reservation.installments_count} cuotas`}
+                  : `${successResults[0].installments_count} cuotas`}
               </span>
             </div>
             <div className="flex items-center justify-between py-3">
-              <span className="text-sm text-navy-400">Monto</span>
+              <span className="text-sm text-navy-400">Monto total</span>
               <span className="text-lg font-bold text-navy-700">
-                ${reservation.ticket_price}
+                $
+                {successResults.reduce(
+                  (sum, r) => sum + r.ticket_price,
+                  0,
+                )}
               </span>
             </div>
           </div>
+
+          {/* Reservation code for single ticket */}
+          {successResults.length === 1 && (
+            <div className="border-t border-navy-100 px-5 py-4 text-center">
+              <p className="text-xs font-medium uppercase tracking-wider text-navy-400">
+                Código de reserva
+              </p>
+              <p className="mt-1 select-all break-all font-mono text-sm font-bold text-navy-700">
+                {successResults[0].reservation_id}
+              </p>
+            </div>
+          )}
 
           {/* QR Code */}
           {origin && (
             <div className="border-t border-navy-100 px-5 py-4 text-center">
               <p className="mb-2 text-xs font-medium text-navy-400">
-                QR para consultar reserva
+                QR para consultar{" "}
+                {successResults.length === 1 ? "reserva" : "reservas"}
               </p>
               <div className="inline-block rounded-xl bg-white p-3 shadow-sm">
                 <QRCodeSVG
-                  value={`${origin}/mis-numeros?email=${encodeURIComponent(reservation.buyer_email)}&id=${encodeURIComponent(reservation.reservation_id)}`}
+                  value={
+                    successResults.length === 1
+                      ? `${origin}/mis-numeros?email=${encodeURIComponent(successResults[0].buyer_email)}&id=${encodeURIComponent(successResults[0].reservation_id)}`
+                      : `${origin}/mis-numeros?email=${encodeURIComponent(successResults[0].buyer_email)}`
+                  }
                   size={160}
                   level="M"
                 />
               </div>
               <p className="mt-2 text-xs text-navy-300">
-                El comprador puede escanear para ver su reserva
+                El comprador puede escanear para ver{" "}
+                {successResults.length === 1
+                  ? "su reserva"
+                  : "sus reservas"}
               </p>
             </div>
           )}
@@ -661,7 +800,7 @@ export default function SellerSellPage() {
           className="btn-secondary flex-1"
           onClick={() => {
             setStep("select");
-            setSelectedNumber(null);
+            setSelectedNumbers([]);
             setBuyerEmail("");
             setBuyerName("");
             setBuyerPhone("");

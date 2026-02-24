@@ -16,7 +16,7 @@ export default async function SellerLayout({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, full_name")
+    .select("role, full_name, seller_code")
     .eq("id", user.id)
     .single();
 
@@ -32,9 +32,14 @@ export default async function SellerLayout({
             <h1 className="text-lg font-bold text-navy-700">
               Panel Vendedor
             </h1>
-            <p className="text-xs text-navy-400">{profile.full_name}</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2">
+            <a
+              href="/seller/dashboard"
+              className="text-sm font-medium text-navy-600 hover:text-navy-800"
+            >
+              Inicio
+            </a>
             {profile.role === "admin" && (
               <a
                 href="/admin"
@@ -43,12 +48,6 @@ export default async function SellerLayout({
                 Admin
               </a>
             )}
-            <a
-              href="/seller/dashboard"
-              className="text-sm font-medium text-navy-600 hover:text-navy-800"
-            >
-              Inicio
-            </a>
             <LogoutButton />
           </div>
         </div>
