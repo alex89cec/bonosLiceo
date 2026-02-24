@@ -1,0 +1,68 @@
+import Link from "next/link";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import type { Profile } from "@/types/database";
+
+export default async function AdminSellersPage() {
+  const supabase = await createServerSupabaseClient();
+  const { data: sellers } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "seller")
+    .order("created_at", { ascending: false });
+
+  const sellerList = (sellers as Profile[] | null) ?? [];
+
+  return (
+    <div>
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-xl font-bold">Vendedores</h2>
+        <Link href="/admin/sellers/new" className="btn-primary">
+          + Nuevo vendedor
+        </Link>
+      </div>
+
+      {sellerList.length > 0 ? (
+        <div className="space-y-3">
+          {sellerList.map((seller) => (
+            <div key={seller.id} className="card">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">{seller.full_name}</h3>
+                    {!seller.is_active && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">
+                        Inactivo
+                      </span>
+                    )}
+                    {seller.must_change_password && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-600">
+                        Pendiente
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500">{seller.email}</p>
+                </div>
+                <div className="text-right">
+                  <span className="rounded-lg bg-navy-50 px-3 py-1 font-mono text-sm font-semibold text-navy-600">
+                    {seller.seller_code}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-400">
+                <span>
+                  Creado:{" "}
+                  {new Date(seller.created_at).toLocaleDateString("es")}
+                </span>
+                {seller.phone && <span>Tel: {seller.phone}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="py-12 text-center text-gray-500">
+          No hay vendedores. Agrega el primero.
+        </p>
+      )}
+    </div>
+  );
+}
