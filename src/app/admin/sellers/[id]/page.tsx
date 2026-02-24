@@ -256,6 +256,7 @@ export default function SellerDetailPage() {
               </div>
               <span className="toggle-slider">
                 <input
+                  className="sr-only"
                   type="checkbox"
                   checked={isActive}
                   onChange={(e) => setIsActive(e.target.checked)}
@@ -327,6 +328,7 @@ export default function SellerDetailPage() {
                         )}
                         <span className="toggle-slider">
                           <input
+                            className="sr-only"
                             type="checkbox"
                             checked={c.assigned}
                             disabled={c.assigned && c.sold_count > 0}

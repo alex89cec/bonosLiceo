@@ -399,6 +399,7 @@ export default function NewCampaignPage() {
             </div>
             <span className="toggle-slider">
               <input
+                className="sr-only"
                 type="checkbox"
                 checked={installmentsEnabled}
                 onChange={(e) => setInstallmentsEnabled(e.target.checked)}
