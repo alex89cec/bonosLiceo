@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 
 interface InstallmentData {
   id: string;
@@ -40,6 +41,7 @@ export default function ReservationCard({
   const [expanded, setExpanded] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null); // null or "full" or installment number
   const [error, setError] = useState<string | null>(null);
+  const [showQR, setShowQR] = useState(false);
 
   const r = reservation;
   const p = r.payment;
@@ -325,6 +327,44 @@ export default function ReservationCard({
               </div>
             </div>
           )}
+
+          {/* QR Code toggle */}
+          <div className="border-t border-navy-100 px-4 py-3">
+            <button
+              onClick={() => setShowQR(!showQR)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-navy-200 px-3 py-2 text-sm font-medium text-navy-600 transition-colors hover:bg-navy-50"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+                />
+              </svg>
+              {showQR ? "Ocultar QR" : "Ver QR"}
+            </button>
+            {showQR && (
+              <div className="mt-3 text-center">
+                <div className="inline-block rounded-xl bg-white p-3 shadow-sm">
+                  <QRCodeSVG
+                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/mis-numeros?email=${encodeURIComponent(r.buyer_email)}&id=${encodeURIComponent(r.id)}`}
+                    size={160}
+                    level="M"
+                  />
+                </div>
+                <p className="mt-2 text-xs text-navy-300">
+                  El comprador puede escanear para ver su reserva
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Reserve ID */}
           <div className="border-t border-navy-50 px-4 py-2">
