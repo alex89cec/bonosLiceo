@@ -38,6 +38,7 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_auto_assign_admins_on_campaign on public.campaigns;
 create trigger trg_auto_assign_admins_on_campaign
   after insert on public.campaigns
   for each row
@@ -66,6 +67,7 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_auto_assign_admin_to_campaigns on public.profiles;
 create trigger trg_auto_assign_admin_to_campaigns
   after insert or update of role on public.profiles
   for each row

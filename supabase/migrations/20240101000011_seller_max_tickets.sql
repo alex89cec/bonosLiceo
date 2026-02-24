@@ -8,11 +8,20 @@
 -- 1. ADD max_tickets COLUMN TO campaign_sellers
 -- ============================================================
 alter table public.campaign_sellers
-  add column max_tickets int default null;
+  add column if not exists max_tickets int default null;
 
-alter table public.campaign_sellers
-  add constraint chk_max_tickets_positive
-    check (max_tickets is null or max_tickets > 0);
+-- Only add constraint if it doesn't exist
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.constraint_column_usage
+    where table_name = 'campaign_sellers' and constraint_name = 'chk_max_tickets_positive'
+  ) then
+    alter table public.campaign_sellers
+      add constraint chk_max_tickets_positive
+        check (max_tickets is null or max_tickets > 0);
+  end if;
+end $$;
 
 -- ============================================================
 -- 2. RECREATE reserve_ticket WITH SELLER LIMIT CHECK
