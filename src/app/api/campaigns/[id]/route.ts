@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { campaignSchema } from "@/lib/validations";
 
+// Vercel serverless max duration (seconds). Free=10, Pro=60.
+export const maxDuration = 10;
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -163,26 +166,10 @@ export async function PUT(
       );
     }
 
-    // 8. Check if number range changed — if so, delete old tickets and let trigger regenerate
+    // 8. Check if number range changed
     const rangeChanged =
       data.number_from !== existingCampaign.number_from ||
       data.number_to !== existingCampaign.number_to;
-
-    if (rangeChanged) {
-      // Delete all existing tickets (all are available since we checked above)
-      const { error: deleteError } = await supabase
-        .from("tickets")
-        .delete()
-        .eq("campaign_id", id);
-
-      if (deleteError) {
-        console.error("Error deleting tickets:", deleteError);
-        return NextResponse.json(
-          { error: "Error al actualizar los números de la campaña" },
-          { status: 500 },
-        );
-      }
-    }
 
     // 9. Update campaign
     const { data: campaign, error: updateError } = await supabase
@@ -222,32 +209,23 @@ export async function PUT(
       );
     }
 
-    // 10. If range changed, regenerate tickets
+    // 10. If range changed, regenerate tickets via single DB function call
     if (rangeChanged && campaign) {
-      const tickets = [];
-      for (let i = data.number_from; i <= data.number_to; i++) {
-        tickets.push({
-          campaign_id: id,
-          number: String(i).padStart(5, "0"),
-          status: "available" as const,
-          seller_id: null,
-        });
-      }
+      const { error: regenError } = await supabase.rpc(
+        "regenerate_campaign_tickets",
+        {
+          p_campaign_id: id,
+          p_number_from: data.number_from,
+          p_number_to: data.number_to,
+        },
+      );
 
-      // Insert in batches of 1000
-      for (let i = 0; i < tickets.length; i += 1000) {
-        const batch = tickets.slice(i, i + 1000);
-        const { error: insertError } = await supabase
-          .from("tickets")
-          .insert(batch);
-
-        if (insertError) {
-          console.error("Error inserting tickets batch:", insertError);
-          return NextResponse.json(
-            { error: "Error al regenerar los números de la campaña" },
-            { status: 500 },
-          );
-        }
+      if (regenError) {
+        console.error("Error regenerating tickets:", regenError);
+        return NextResponse.json(
+          { error: "Error al regenerar los números de la campaña" },
+          { status: 500 },
+        );
       }
     }
 
