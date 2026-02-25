@@ -171,9 +171,9 @@ export default function EditCampaignPage() {
     }
   }
 
-  // Fetch sorteo data when campaign is not editable
+  // Fetch sorteo data when campaign is not editable (has taken tickets)
   useEffect(() => {
-    if (!editable && !pageLoading) {
+    if (!editable && !pageLoading && status !== "draft") {
       fetchWinners();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -368,7 +368,15 @@ export default function EditCampaignPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="text-navy-400">Estado</span>
-                <p className="font-semibold capitalize">{status}</p>
+                <p className={`font-semibold ${
+                  status === "active" ? "text-green-600" :
+                  status === "sorted" ? "text-purple-600" :
+                  status === "closed" ? "text-gray-500" : "text-yellow-600"
+                }`}>
+                  {status === "active" ? "Activa" :
+                   status === "sorted" ? "Sorteada" :
+                   status === "closed" ? "Cerrada" : "Borrador"}
+                </p>
               </div>
               <div>
                 <span className="text-navy-400">Precio</span>
@@ -428,8 +436,8 @@ export default function EditCampaignPage() {
 
           {/* ─── SORTEO SECTION ─── */}
 
-          {/* Draw controls — only when campaign is active */}
-          {status === "active" && (
+          {/* Draw controls — when campaign is active or sorted */}
+          {(status === "active" || status === "sorted") && (
             <div className="card space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
@@ -591,8 +599,8 @@ export default function EditCampaignPage() {
             </div>
           )}
 
-          {/* Close campaign button — only when active and has winners */}
-          {status === "active" && winners.length > 0 && (
+          {/* Close campaign button — only when sorted (has winners) */}
+          {status === "sorted" && winners.length > 0 && (
             <div className="card space-y-3 border-red-200">
               {!showCloseConfirm ? (
                 <button

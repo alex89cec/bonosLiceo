@@ -46,9 +46,9 @@ export async function POST(
       return NextResponse.json({ error: "Campaña no encontrada" }, { status: 404 });
     }
 
-    if (campaign.status !== "active") {
+    if (campaign.status !== "sorted") {
       return NextResponse.json(
-        { error: "Solo se pueden cerrar campañas activas" },
+        { error: "Solo se pueden cerrar campañas que ya fueron sorteadas" },
         { status: 400 },
       );
     }

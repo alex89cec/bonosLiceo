@@ -3,7 +3,7 @@
 // Below are manual types matching the schema for development.
 
 export type UserRole = "admin" | "seller";
-export type CampaignStatus = "draft" | "active" | "closed";
+export type CampaignStatus = "draft" | "active" | "sorted" | "closed";
 export type TicketStatus = "available" | "reserved" | "sold";
 export type ReservationStatus = "active" | "confirmed" | "cancelled";
 export type PaymentMode = "full_payment" | "installments";

@@ -74,16 +74,20 @@ export default async function AdminCampaignsPage() {
                     className={`rounded-full px-3 py-1 text-xs font-medium ${
                       campaign.status === "active"
                         ? "bg-green-100 text-green-700"
-                        : campaign.status === "draft"
-                          ? "bg-yellow-100 text-yellow-700"
-                          : "bg-gray-100 text-gray-700"
+                        : campaign.status === "sorted"
+                          ? "bg-purple-100 text-purple-700"
+                          : campaign.status === "draft"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-gray-100 text-gray-700"
                     }`}
                   >
                     {campaign.status === "draft"
                       ? "Borrador"
                       : campaign.status === "active"
                         ? "Activa"
-                        : "Cerrada"}
+                        : campaign.status === "sorted"
+                          ? "Sorteada"
+                          : "Cerrada"}
                   </span>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
