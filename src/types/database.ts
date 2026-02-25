@@ -105,6 +105,18 @@ export interface CampaignSeller {
   assigned_at: string;
 }
 
+export interface Winner {
+  id: string;
+  campaign_id: string;
+  ticket_id: string;
+  ticket_number: string;
+  buyer_name: string | null;
+  buyer_email: string;
+  position: number;
+  drawn_at: string;
+  drawn_by: string;
+}
+
 // RPC response types
 export interface ReserveTicketResponse {
   success: boolean;
