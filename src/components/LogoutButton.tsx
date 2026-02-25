@@ -20,7 +20,7 @@ export default function LogoutButton() {
     <button
       onClick={handleLogout}
       disabled={loading}
-      className="text-sm font-medium text-navy-400 hover:text-red-500 transition-colors"
+      className="whitespace-nowrap text-sm font-medium text-navy-400 transition-colors hover:text-red-500"
     >
       {loading ? "Saliendo..." : "Salir"}
     </button>

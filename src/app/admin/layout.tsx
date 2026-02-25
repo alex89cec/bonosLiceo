@@ -28,16 +28,16 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="border-b bg-white px-4 py-3">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <h1 className="text-lg font-bold text-gray-900">Admin Panel</h1>
-          <div className="flex gap-4 text-sm">
-            <a href="/admin" className="text-primary-600">
+        <div className="mx-auto flex max-w-5xl items-center gap-3">
+          <h1 className="shrink-0 text-lg font-bold text-gray-900">Admin</h1>
+          <div className="flex flex-1 items-center justify-end gap-3 text-sm">
+            <a href="/admin" className="whitespace-nowrap text-primary-600">
               Campañas
             </a>
-            <a href="/admin/sellers" className="text-gray-600">
+            <a href="/admin/sellers" className="whitespace-nowrap text-gray-600">
               Vendedores
             </a>
-            <a href="/admin/reports" className="text-gray-600">
+            <a href="/admin/reports" className="whitespace-nowrap text-gray-600">
               Reportes
             </a>
             <LogoutButton />
