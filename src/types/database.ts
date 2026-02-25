@@ -3,7 +3,7 @@
 // Below are manual types matching the schema for development.
 
 export type UserRole = "admin" | "seller";
-export type CampaignStatus = "draft" | "active" | "closed";
+export type CampaignStatus = "draft" | "active" | "sorted" | "closed";
 export type TicketStatus = "available" | "reserved" | "sold";
 export type ReservationStatus = "active" | "confirmed" | "cancelled";
 export type PaymentMode = "full_payment" | "installments";
@@ -103,6 +103,18 @@ export interface CampaignSeller {
   seller_id: string;
   max_tickets: number | null;
   assigned_at: string;
+}
+
+export interface Winner {
+  id: string;
+  campaign_id: string;
+  ticket_id: string;
+  ticket_number: string;
+  buyer_name: string | null;
+  buyer_email: string;
+  position: number;
+  drawn_at: string;
+  drawn_by: string;
 }
 
 // RPC response types

@@ -56,6 +56,18 @@ export const reserveBatchSchema = z.object({
   buyer_phone: z.string().optional(),
 });
 
+export const sorteoSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("random"),
+    count: z.number().int().min(1).max(100),
+  }),
+  z.object({
+    mode: z.literal("manual"),
+    ticket_number: ticketNumberSchema,
+  }),
+]);
+
 export type ReserveTicketInput = z.infer<typeof reserveTicketSchema>;
 export type ReserveBatchInput = z.infer<typeof reserveBatchSchema>;
 export type CampaignInput = z.infer<typeof campaignSchema>;
+export type SorteoInput = z.infer<typeof sorteoSchema>;

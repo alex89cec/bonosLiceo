@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import type { Campaign, CampaignStatus } from "@/types/database";
+import type { Campaign, CampaignStatus, Winner } from "@/types/database";
 
 function slugify(text: string): string {
   return text
@@ -52,6 +52,18 @@ export default function EditCampaignPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Sorteo state
+  const [sorteoMode, setSorteoMode] = useState<"random" | "manual">("random");
+  const [manualNumber, setManualNumber] = useState("");
+  const [randomCount, setRandomCount] = useState("1");
+  const [winners, setWinners] = useState<Winner[]>([]);
+  const [eligibleCount, setEligibleCount] = useState(0);
+  const [sorteoLoading, setSorteoLoading] = useState(false);
+  const [sorteoError, setSorteoError] = useState<string | null>(null);
+  const [sorteoSuccess, setSorteoSuccess] = useState<string | null>(null);
+  const [closeLoading, setCloseLoading] = useState(false);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const rangeSize =
     Math.max(0, parseInt(numberTo || "0") - parseInt(numberFrom || "0") + 1);
@@ -157,6 +169,95 @@ export default function EditCampaignPage() {
       setError("Error de conexión. Intenta de nuevo.");
       setLoading(false);
     }
+  }
+
+  // Fetch sorteo data when campaign is not editable (has taken tickets)
+  useEffect(() => {
+    if (!editable && !pageLoading && status !== "draft") {
+      fetchWinners();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editable, pageLoading]);
+
+  async function fetchWinners() {
+    try {
+      const res = await fetch(`/api/campaigns/${id}/sorteo`);
+      const data = await res.json();
+      if (res.ok) {
+        setWinners(data.winners || []);
+        setEligibleCount(data.eligible_count ?? 0);
+        if (data.campaign_status) {
+          setStatus(data.campaign_status);
+        }
+      }
+    } catch {
+      // Silent fail — winners just won't load
+    }
+  }
+
+  async function handleSorteo() {
+    setSorteoLoading(true);
+    setSorteoError(null);
+    setSorteoSuccess(null);
+
+    const body =
+      sorteoMode === "random"
+        ? { mode: "random" as const, count: parseInt(randomCount) }
+        : { mode: "manual" as const, ticket_number: manualNumber.padStart(5, "0") };
+
+    try {
+      const res = await fetch(`/api/campaigns/${id}/sorteo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSorteoError(data.error || "Error al realizar el sorteo");
+      } else {
+        if (sorteoMode === "random") {
+          const drawn = data.drawn ?? 0;
+          setSorteoSuccess(
+            `Se sortearon ${drawn} ganador${drawn !== 1 ? "es" : ""}` +
+              (data.warning ? `. ${data.warning}` : ""),
+          );
+        } else {
+          setSorteoSuccess(`Boleto ${manualNumber.padStart(5, "0")} agregado como ganador`);
+        }
+        setManualNumber("");
+        await fetchWinners();
+      }
+    } catch {
+      setSorteoError("Error de conexión");
+    }
+    setSorteoLoading(false);
+  }
+
+  async function handleCloseCampaign() {
+    setCloseLoading(true);
+    setSorteoError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/close`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStatus("closed");
+        setShowCloseConfirm(false);
+      } else {
+        setSorteoError(data.error || "Error al cerrar la campaña");
+      }
+    } catch {
+      setSorteoError("Error de conexión");
+    }
+    setCloseLoading(false);
+  }
+
+  function positionLabel(pos: number): string {
+    if (pos === 1) return "1er Premio";
+    if (pos === 2) return "2do Premio";
+    if (pos === 3) return "3er Premio";
+    return `${pos}to Premio`;
   }
 
   // Loading state
@@ -267,7 +368,15 @@ export default function EditCampaignPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="text-navy-400">Estado</span>
-                <p className="font-semibold capitalize">{status}</p>
+                <p className={`font-semibold ${
+                  status === "active" ? "text-green-600" :
+                  status === "sorted" ? "text-purple-600" :
+                  status === "closed" ? "text-gray-500" : "text-yellow-600"
+                }`}>
+                  {status === "active" ? "Activa" :
+                   status === "sorted" ? "Sorteada" :
+                   status === "closed" ? "Cerrada" : "Borrador"}
+                </p>
               </div>
               <div>
                 <span className="text-navy-400">Precio</span>
@@ -322,6 +431,242 @@ export default function EditCampaignPage() {
                 Descripción
               </h3>
               <p className="text-sm text-navy-600">{description}</p>
+            </div>
+          )}
+
+          {/* ─── SORTEO SECTION ─── */}
+
+          {/* Draw controls — when campaign is active or sorted */}
+          {(status === "active" || status === "sorted") && (
+            <div className="card space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+                  Sorteo
+                </h3>
+                <span className="rounded-full bg-navy-50 px-3 py-1 text-xs font-medium text-navy-500">
+                  {eligibleCount} boleto{eligibleCount !== 1 ? "s" : ""} elegible{eligibleCount !== 1 ? "s" : ""}
+                </span>
+              </div>
+
+              {/* Mode tabs */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSorteoMode("random")}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    sorteoMode === "random"
+                      ? "bg-gold-100 text-gold-700 ring-2 ring-gold-400"
+                      : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                  }`}
+                >
+                  Aleatorio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSorteoMode("manual")}
+                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                    sorteoMode === "manual"
+                      ? "bg-gold-100 text-gold-700 ring-2 ring-gold-400"
+                      : "bg-gray-50 text-gray-400 hover:bg-gray-100"
+                  }`}
+                >
+                  Manual
+                </button>
+              </div>
+
+              {/* Random mode */}
+              {sorteoMode === "random" && (
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <label
+                      htmlFor="randomCount"
+                      className="mb-1.5 block text-sm font-semibold text-navy-700"
+                    >
+                      Cantidad de ganadores
+                    </label>
+                    <input
+                      id="randomCount"
+                      type="number"
+                      className="input-field"
+                      value={randomCount}
+                      onChange={(e) => setRandomCount(e.target.value)}
+                      min="1"
+                      max={Math.max(eligibleCount, 1)}
+                      step="1"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-gold whitespace-nowrap"
+                    disabled={sorteoLoading || eligibleCount === 0 || parseInt(randomCount) < 1}
+                    onClick={handleSorteo}
+                  >
+                    {sorteoLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
+                        Sorteando...
+                      </span>
+                    ) : (
+                      "🎲 Sortear"
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Manual mode */}
+              {sorteoMode === "manual" && (
+                <div className="flex items-end gap-3">
+                  <div className="flex-1">
+                    <label
+                      htmlFor="manualNumber"
+                      className="mb-1.5 block text-sm font-semibold text-navy-700"
+                    >
+                      Número de boleto ganador
+                    </label>
+                    <input
+                      id="manualNumber"
+                      type="text"
+                      className="input-field font-mono"
+                      placeholder="00000"
+                      value={manualNumber}
+                      onChange={(e) => setManualNumber(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                      maxLength={5}
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-gold whitespace-nowrap"
+                    disabled={sorteoLoading || manualNumber.length === 0}
+                    onClick={handleSorteo}
+                  >
+                    {sorteoLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
+                        Agregando...
+                      </span>
+                    ) : (
+                      "Agregar ganador"
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {/* Error / Success messages */}
+              {sorteoError && (
+                <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">
+                  {sorteoError}
+                </div>
+              )}
+              {sorteoSuccess && (
+                <div className="rounded-xl bg-green-50 p-3 text-sm text-green-700">
+                  {sorteoSuccess}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Winners list — shown when there are winners (active or closed) */}
+          {winners.length > 0 && (
+            <div className="card space-y-3">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+                Ganadores ({winners.length})
+              </h3>
+              <div className="space-y-2">
+                {winners.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center justify-between rounded-xl border border-gold-200 bg-gold-50 p-3"
+                  >
+                    <div>
+                      <span className="text-xs font-medium text-gold-600">
+                        {positionLabel(w.position)}
+                      </span>
+                      <p className="font-mono text-lg font-bold text-navy-700">
+                        {w.ticket_number}
+                      </p>
+                    </div>
+                    <div className="text-right text-sm">
+                      <p className="font-semibold text-navy-700">
+                        {w.buyer_name || "Sin nombre"}
+                      </p>
+                      <p className="text-navy-400">{w.buyer_email}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Close campaign button — only when sorted (has winners) */}
+          {status === "sorted" && winners.length > 0 && (
+            <div className="card space-y-3 border-red-200">
+              {!showCloseConfirm ? (
+                <button
+                  type="button"
+                  className="w-full rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+                  onClick={() => setShowCloseConfirm(true)}
+                >
+                  Cerrar campaña
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-red-700">
+                    Esta acción es irreversible. Se cerrará la campaña con{" "}
+                    <span className="font-bold">{winners.length}</span> ganador
+                    {winners.length !== 1 ? "es" : ""}.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="btn-secondary flex-1"
+                      onClick={() => setShowCloseConfirm(false)}
+                      disabled={closeLoading}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                      onClick={handleCloseCampaign}
+                      disabled={closeLoading}
+                    >
+                      {closeLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          Cerrando...
+                        </span>
+                      ) : (
+                        "Confirmar cierre"
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Closed campaign badge */}
+          {status === "closed" && (
+            <div className="flex items-center gap-2 rounded-xl bg-gray-100 p-4">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-gray-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <p className="text-sm font-semibold text-gray-600">
+                Campaña cerrada
+              </p>
             </div>
           )}
         </div>
@@ -647,6 +992,7 @@ export default function EditCampaignPage() {
             </div>
             <span className="toggle-slider">
               <input
+                className="sr-only"
                 type="checkbox"
                 checked={installmentsEnabled}
                 onChange={(e) => setInstallmentsEnabled(e.target.checked)}

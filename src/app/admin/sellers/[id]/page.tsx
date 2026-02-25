@@ -256,6 +256,7 @@ export default function SellerDetailPage() {
               </div>
               <span className="toggle-slider">
                 <input
+                  className="sr-only"
                   type="checkbox"
                   checked={isActive}
                   onChange={(e) => setIsActive(e.target.checked)}
@@ -304,16 +305,20 @@ export default function SellerDetailPage() {
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                             c.campaign_status === "active"
                               ? "bg-green-100 text-green-700"
-                              : c.campaign_status === "draft"
-                                ? "bg-yellow-100 text-yellow-700"
-                                : "bg-gray-100 text-gray-700"
+                              : c.campaign_status === "sorted"
+                                ? "bg-purple-100 text-purple-700"
+                                : c.campaign_status === "draft"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : "bg-gray-100 text-gray-700"
                           }`}
                         >
                           {c.campaign_status === "active"
                             ? "Activa"
-                            : c.campaign_status === "draft"
-                              ? "Borrador"
-                              : "Cerrada"}
+                            : c.campaign_status === "sorted"
+                              ? "Sorteada"
+                              : c.campaign_status === "draft"
+                                ? "Borrador"
+                                : "Cerrada"}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -327,6 +332,7 @@ export default function SellerDetailPage() {
                         )}
                         <span className="toggle-slider">
                           <input
+                            className="sr-only"
                             type="checkbox"
                             checked={c.assigned}
                             disabled={c.assigned && c.sold_count > 0}
