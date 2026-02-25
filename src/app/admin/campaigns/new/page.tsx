@@ -26,7 +26,7 @@ export default function NewCampaignPage() {
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [ticketPrice, setTicketPrice] = useState("");
+  const [ticketPrice, setTicketPrice] = useState("1000");
   const [numberFrom, setNumberFrom] = useState("0");
   const [numberTo, setNumberTo] = useState("9999");
   const [maxTicketsPerBuyer, setMaxTicketsPerBuyer] = useState("1");
@@ -350,7 +350,6 @@ export default function NewCampaignPage() {
                 id="ticketPrice"
                 type="number"
                 className="input-field"
-                placeholder="1000"
                 value={ticketPrice}
                 onChange={(e) => setTicketPrice(e.target.value)}
                 required
@@ -446,7 +445,7 @@ export default function NewCampaignPage() {
           </Link>
           <button
             type="submit"
-            className="btn-gold flex-1"
+            className="btn-gold flex-1 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={
               loading ||
               !name ||
