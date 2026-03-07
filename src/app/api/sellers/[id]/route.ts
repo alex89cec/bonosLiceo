@@ -14,6 +14,7 @@ const updateSellerSchema = z.object({
     .optional(),
   new_password: z.string().min(8).optional(),
   is_active: z.boolean().optional(),
+  group_id: z.string().uuid().nullable().optional(),
   campaigns: z
     .array(
       z.object({
@@ -117,9 +118,17 @@ export async function GET(
       };
     });
 
+    // 7. Fetch available groups for selector
+    const { data: groupsList } = await supabase
+      .from("seller_groups")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+
     return NextResponse.json({
       seller,
       campaigns: enrichedCampaigns,
+      groups: groupsList || [],
     });
   } catch (err) {
     console.error("Seller fetch error:", err);
@@ -172,7 +181,7 @@ export async function PUT(
       );
     }
 
-    const { full_name, email, new_password, is_active, campaigns } =
+    const { full_name, email, new_password, is_active, group_id, campaigns } =
       parsed.data;
 
     const serviceClient = createServiceRoleClient();
@@ -182,6 +191,7 @@ export async function PUT(
     if (full_name !== undefined) profileUpdate.full_name = full_name;
     if (email !== undefined) profileUpdate.email = email;
     if (is_active !== undefined) profileUpdate.is_active = is_active;
+    if (group_id !== undefined) profileUpdate.group_id = group_id;
 
     if (Object.keys(profileUpdate).length > 0) {
       // Check email uniqueness if changing

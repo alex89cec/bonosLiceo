@@ -31,6 +31,8 @@ export default function SellerDetailPage() {
 
   const [sellerRole, setSellerRole] = useState<string>("seller");
   const [sellerCode, setSellerCode] = useState<string>("");
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,9 @@ export default function SellerDetailPage() {
         setIsActive(s.is_active);
         setSellerRole(s.role);
         setSellerCode(s.seller_code || "");
+        setGroupId(s.group_id || null);
         setCampaigns(data.campaigns || []);
+        setGroups(data.groups || []);
         setPageLoading(false);
       } catch {
         setPageError("Error de conexión");
@@ -91,6 +95,7 @@ export default function SellerDetailPage() {
       is_active: isActive,
     };
     if (newPassword) body.new_password = newPassword;
+    body.group_id = groupId;
     body.campaigns = campaigns.map((c) => ({
       campaign_id: c.campaign_id,
       assigned: c.assigned,
@@ -266,6 +271,39 @@ export default function SellerDetailPage() {
             </label>
           </div>
         </div>
+
+        {/* Group assignment — only for sellers */}
+        {sellerRole === "seller" && groups.length > 0 && (
+          <div className="card space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+              Grupo
+            </h3>
+            <div>
+              <label
+                htmlFor="groupSelect"
+                className="mb-1.5 block text-sm font-semibold text-navy-700"
+              >
+                Grupo asignado
+              </label>
+              <select
+                id="groupSelect"
+                className="input-field"
+                value={groupId || ""}
+                onChange={(e) => setGroupId(e.target.value || null)}
+              >
+                <option value="">Sin grupo</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-navy-400">
+                Al cambiar de grupo, las campañas del grupo se asignarán automáticamente.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Campaign assignments */}
         <div className="card space-y-4">

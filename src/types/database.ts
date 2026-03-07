@@ -19,6 +19,7 @@ export interface Profile {
   seller_code: string | null;
   is_active: boolean;
   must_change_password: boolean;
+  group_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -102,6 +103,22 @@ export interface CampaignSeller {
   campaign_id: string;
   seller_id: string;
   max_tickets: number | null;
+  assigned_at: string;
+}
+
+export interface SellerGroup {
+  id: string;
+  name: string;
+  admin_id: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignGroup {
+  id: string;
+  campaign_id: string;
+  group_id: string;
   assigned_at: string;
 }
 
