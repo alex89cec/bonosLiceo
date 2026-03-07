@@ -168,7 +168,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/groups/[id] — soft-delete (set inactive)
+// DELETE /api/groups/[id] — hard delete (CASCADE cleans campaign_groups, SET NULL cleans profiles.group_id)
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -194,15 +194,29 @@ export async function DELETE(
       return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
     }
 
-    const { error: updateError } = await supabase
+    // Verify group exists
+    const { data: group } = await supabase
       .from("seller_groups")
-      .update({ is_active: false })
+      .select("id")
+      .eq("id", id)
+      .single();
+
+    if (!group) {
+      return NextResponse.json(
+        { error: "Grupo no encontrado" },
+        { status: 404 },
+      );
+    }
+
+    const { error: deleteError } = await supabase
+      .from("seller_groups")
+      .delete()
       .eq("id", id);
 
-    if (updateError) {
-      console.error("Group delete error:", updateError);
+    if (deleteError) {
+      console.error("Group delete error:", deleteError);
       return NextResponse.json(
-        { error: "Error al desactivar el grupo" },
+        { error: "Error al eliminar el grupo" },
         { status: 500 },
       );
     }

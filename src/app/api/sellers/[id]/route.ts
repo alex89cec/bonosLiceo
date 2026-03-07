@@ -338,3 +338,85 @@ export async function PUT(
     );
   }
 }
+
+// DELETE /api/sellers/[id] — soft-delete (deactivate + remove from group)
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createServerSupabaseClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile || profile.role !== "admin") {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    }
+
+    // Prevent self-deletion
+    if (id === user.id) {
+      return NextResponse.json(
+        { error: "No puedes desactivar tu propia cuenta" },
+        { status: 400 },
+      );
+    }
+
+    // Check for active reservations in active campaigns
+    const { data: activeReservations } = await supabase
+      .from("reservations")
+      .select("campaign_id, campaigns:campaign_id(name, status)")
+      .eq("seller_id", id)
+      .in("status", ["active", "confirmed"]);
+
+    const blockingReservations = (activeReservations || []).filter(
+      (r: Record<string, unknown>) => {
+        const campaign = r.campaigns as Record<string, unknown> | null;
+        return campaign?.status === "active";
+      },
+    );
+
+    if (blockingReservations.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No se puede desactivar: tiene reservaciones activas en campañas activas",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Soft delete: deactivate and remove from group
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ is_active: false, group_id: null })
+      .eq("id", id);
+
+    if (updateError) {
+      console.error("Seller delete error:", updateError);
+      return NextResponse.json(
+        { error: "Error al desactivar el vendedor" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Seller delete error:", err);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 },
+    );
+  }
+}

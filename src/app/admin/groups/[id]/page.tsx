@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
 interface Member {
@@ -29,6 +29,7 @@ interface CampaignOption {
 }
 
 export default function GroupDetailPage() {
+  const router = useRouter();
   const { id } = useParams<{ id: string }>();
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -56,6 +57,11 @@ export default function GroupDetailPage() {
   // Edit name
   const [editName, setEditName] = useState("");
   const [editingName, setEditingName] = useState(false);
+
+  // Delete state
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchGroup();
@@ -99,6 +105,24 @@ export default function GroupDetailPage() {
       setSelectedCampaign(unassignedCampaigns[0].id);
     }
   }, [unassignedCampaigns, selectedCampaign]);
+
+  async function handleDeleteGroup() {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/groups/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        router.push("/admin/groups");
+        router.refresh();
+      } else {
+        setDeleteError(data.error || "Error al eliminar el grupo");
+      }
+    } catch {
+      setDeleteError("Error de conexión");
+    }
+    setDeleteLoading(false);
+  }
 
   async function handleAddMember() {
     if (!selectedSeller) return;
@@ -463,6 +487,54 @@ export default function GroupDetailPage() {
               >
                 {addingCampaign ? "..." : "+ Asignar"}
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Delete group */}
+        <div className="card space-y-3 border-red-200">
+          {!showDeleteConfirm ? (
+            <button
+              type="button"
+              className="w-full rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              Eliminar grupo
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-red-700">
+                Se eliminará el grupo. Los miembros serán desvinculados y las
+                campañas asignadas al grupo serán removidas.
+              </p>
+              {deleteError && (
+                <p className="text-sm text-red-600">{deleteError}</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary flex-1"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleteLoading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                  onClick={handleDeleteGroup}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      Eliminando...
+                    </span>
+                  ) : (
+                    "Confirmar eliminación"
+                  )}
+                </button>
+              </div>
             </div>
           )}
         </div>

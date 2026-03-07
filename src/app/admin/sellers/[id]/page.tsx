@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Profile } from "@/types/database";
 
@@ -18,6 +18,7 @@ interface CampaignEntry {
 }
 
 export default function SellerDetailPage() {
+  const router = useRouter();
   const { id } = useParams<{ id: string }>();
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -37,6 +38,11 @@ export default function SellerDetailPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Delete state
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchSeller() {
@@ -108,6 +114,24 @@ export default function SellerDetailPage() {
     } catch {
       // Silent
     }
+  }
+
+  async function handleDelete() {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/sellers/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        router.push("/admin/sellers");
+        router.refresh();
+      } else {
+        setDeleteError(data.error || "Error al desactivar el vendedor");
+      }
+    } catch {
+      setDeleteError("Error de conexión");
+    }
+    setDeleteLoading(false);
   }
 
   function toggleCampaign(campaignId: string, assigned: boolean) {
@@ -553,6 +577,56 @@ export default function SellerDetailPage() {
             )}
           </button>
         </div>
+
+        {/* Delete seller */}
+        {sellerRole === "seller" && (
+          <div className="mt-6 card space-y-3 border-red-200">
+            {!showDeleteConfirm ? (
+              <button
+                type="button"
+                className="w-full rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Desactivar vendedor
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-red-700">
+                  Se desactivará el vendedor y será removido de su grupo.
+                  No podrá acceder al sistema hasta ser reactivado.
+                </p>
+                {deleteError && (
+                  <p className="text-sm text-red-600">{deleteError}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary flex-1"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleteLoading}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                    onClick={handleDelete}
+                    disabled={deleteLoading}
+                  >
+                    {deleteLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Desactivando...
+                      </span>
+                    ) : (
+                      "Confirmar desactivación"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );
