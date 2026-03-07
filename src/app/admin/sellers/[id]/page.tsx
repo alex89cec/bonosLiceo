@@ -307,9 +307,26 @@ export default function SellerDetailPage() {
 
         {/* Campaign assignments */}
         <div className="card space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
-            Campañas
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+              Campañas
+            </h3>
+            {groupId && (
+              <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-600">
+                Gestionadas por grupo
+              </span>
+            )}
+          </div>
+
+          {groupId && (
+            <p className="text-xs text-navy-400">
+              Las campañas se asignan desde el{" "}
+              <Link href={`/admin/groups/${groupId}`} className="font-semibold text-blue-600 hover:underline">
+                grupo
+              </Link>
+              . Solo se muestran las del grupo.
+            </p>
+          )}
 
           {campaigns.length > 0 ? (
             <div className="space-y-3">
@@ -319,6 +336,8 @@ export default function SellerDetailPage() {
                   ? Math.min((c.sold_count / c.max_tickets!) * 100, 100)
                   : 0;
                 const atLimit = hasLimit && c.sold_count >= c.max_tickets!;
+                // If seller has a group, campaign toggles are read-only
+                const isGroupManaged = !!groupId;
 
                 return (
                   <div
@@ -359,32 +378,34 @@ export default function SellerDetailPage() {
                                 : "Cerrada"}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {c.assigned && c.sold_count > 0 && (
-                          <span
-                            className="text-xs text-navy-400"
-                            title="No se puede desasignar: tiene ventas activas"
-                          >
-                            🔒
+                      {!isGroupManaged && (
+                        <div className="flex items-center gap-2">
+                          {c.assigned && c.sold_count > 0 && (
+                            <span
+                              className="text-xs text-navy-400"
+                              title="No se puede desasignar: tiene ventas activas"
+                            >
+                              🔒
+                            </span>
+                          )}
+                          <span className="toggle-slider">
+                            <input
+                              className="sr-only"
+                              type="checkbox"
+                              checked={c.assigned}
+                              disabled={c.assigned && c.sold_count > 0}
+                              onChange={(e) =>
+                                toggleCampaign(c.campaign_id, e.target.checked)
+                              }
+                            />
+                            <span
+                              className={`slider ${c.assigned && c.sold_count > 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                            />
                           </span>
-                        )}
-                        <span className="toggle-slider">
-                          <input
-                            className="sr-only"
-                            type="checkbox"
-                            checked={c.assigned}
-                            disabled={c.assigned && c.sold_count > 0}
-                            onChange={(e) =>
-                              toggleCampaign(c.campaign_id, e.target.checked)
-                            }
-                          />
-                          <span
-                            className={`slider ${c.assigned && c.sold_count > 0 ? "opacity-50 cursor-not-allowed" : ""}`}
-                          />
-                        </span>
-                      </div>
+                        </div>
+                      )}
                     </div>
-                    {c.assigned && c.sold_count > 0 && (
+                    {!isGroupManaged && c.assigned && c.sold_count > 0 && (
                       <p className="mt-1 text-right text-xs text-navy-400">
                         No se puede desasignar (tiene {c.sold_count} venta
                         {c.sold_count > 1 ? "s" : ""})
@@ -454,7 +475,9 @@ export default function SellerDetailPage() {
             </div>
           ) : (
             <p className="py-4 text-center text-sm text-navy-400">
-              No hay campañas creadas
+              {groupId
+                ? "El grupo no tiene campañas asignadas"
+                : "No hay campañas creadas"}
             </p>
           )}
         </div>

@@ -68,11 +68,35 @@ export async function GET(
       );
     }
 
-    // 2. Fetch ALL campaigns
-    const { data: allCampaigns } = await supabase
+    // 2. Determine which campaigns to show
+    // If seller has a group, only show campaigns assigned to their group
+    // If no group, show all campaigns (legacy behavior)
+    let campaignIds: string[] | null = null;
+
+    if (seller.group_id) {
+      const { data: groupCampaigns } = await supabase
+        .from("campaign_groups")
+        .select("campaign_id")
+        .eq("group_id", seller.group_id);
+
+      campaignIds = (groupCampaigns || []).map((gc) => gc.campaign_id);
+    }
+
+    let campaignsQuery = supabase
       .from("campaigns")
       .select("id, name, slug, status")
       .order("created_at", { ascending: false });
+
+    if (campaignIds !== null) {
+      if (campaignIds.length === 0) {
+        // Group has no campaigns assigned — return empty list
+        campaignsQuery = campaignsQuery.in("id", ["00000000-0000-0000-0000-000000000000"]);
+      } else {
+        campaignsQuery = campaignsQuery.in("id", campaignIds);
+      }
+    }
+
+    const { data: allCampaigns } = await campaignsQuery;
 
     // 3. Fetch campaign assignments for this seller
     const { data: assignments } = await supabase
@@ -102,7 +126,7 @@ export async function GET(
       };
     });
 
-    // 6. Build enriched campaigns list (all campaigns with assignment info)
+    // 6. Build enriched campaigns list
     const enrichedCampaigns = (allCampaigns || []).map((c) => {
       const assignment = assignmentMap[c.id];
       return {
