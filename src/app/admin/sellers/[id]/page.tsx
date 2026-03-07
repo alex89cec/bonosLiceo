@@ -67,6 +67,49 @@ export default function SellerDetailPage() {
     fetchSeller();
   }, [id]);
 
+  // When group changes, fetch that group's campaigns to preview
+  async function handleGroupChange(newGroupId: string | null) {
+    setGroupId(newGroupId);
+
+    if (!newGroupId) {
+      // No group — fetch all campaigns (legacy)
+      try {
+        const res = await fetch(`/api/sellers/${id}`);
+        const data = await res.json();
+        if (res.ok) {
+          setCampaigns(data.campaigns || []);
+        }
+      } catch {
+        // Silent
+      }
+      return;
+    }
+
+    // Fetch group detail to get assigned campaigns
+    try {
+      const res = await fetch(`/api/groups/${newGroupId}`);
+      const data = await res.json();
+      if (res.ok) {
+        const groupCampaigns: CampaignEntry[] = (data.assigned_campaigns || []).map(
+          (c: { id: string; name: string; slug: string; status: string }) => ({
+            campaign_id: c.id,
+            campaign_name: c.name,
+            campaign_slug: c.slug,
+            campaign_status: c.status,
+            assigned: true,
+            assignment_id: null,
+            max_tickets: null,
+            assigned_at: null,
+            sold_count: 0,
+          }),
+        );
+        setCampaigns(groupCampaigns);
+      }
+    } catch {
+      // Silent
+    }
+  }
+
   function toggleCampaign(campaignId: string, assigned: boolean) {
     setCampaigns((prev) =>
       prev.map((c) =>
@@ -289,7 +332,7 @@ export default function SellerDetailPage() {
                 id="groupSelect"
                 className="input-field"
                 value={groupId || ""}
-                onChange={(e) => setGroupId(e.target.value || null)}
+                onChange={(e) => handleGroupChange(e.target.value || null)}
               >
                 <option value="">Sin grupo</option>
                 {groups.map((g) => (
