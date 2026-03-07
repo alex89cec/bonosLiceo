@@ -14,12 +14,12 @@ export default async function AdminSellersPage() {
 
   const { data: sellers } = await supabase
     .from("profiles")
-    .select("*")
+    .select("*, seller_group:group_id(id, name)")
     .eq("role", "seller")
     .order("created_at", { ascending: false });
 
   const adminList = (admins as Profile[] | null) ?? [];
-  const sellerList = (sellers as Profile[] | null) ?? [];
+  const sellerList = (sellers as (Profile & { seller_group: { id: string; name: string } | null })[] | null) ?? [];
 
   return (
     <div>
@@ -88,6 +88,11 @@ export default async function AdminSellersPage() {
                     {!seller.is_active && (
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">
                         Inactivo
+                      </span>
+                    )}
+                    {seller.seller_group && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-600">
+                        {seller.seller_group.name}
                       </span>
                     )}
                     {seller.must_change_password && (

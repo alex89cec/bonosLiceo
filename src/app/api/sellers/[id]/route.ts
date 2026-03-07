@@ -14,6 +14,7 @@ const updateSellerSchema = z.object({
     .optional(),
   new_password: z.string().min(8).optional(),
   is_active: z.boolean().optional(),
+  group_id: z.string().uuid().nullable().optional(),
   campaigns: z
     .array(
       z.object({
@@ -67,11 +68,35 @@ export async function GET(
       );
     }
 
-    // 2. Fetch ALL campaigns
-    const { data: allCampaigns } = await supabase
+    // 2. Determine which campaigns to show
+    // If seller has a group, only show campaigns assigned to their group
+    // If no group, show all campaigns (legacy behavior)
+    let campaignIds: string[] | null = null;
+
+    if (seller.group_id) {
+      const { data: groupCampaigns } = await supabase
+        .from("campaign_groups")
+        .select("campaign_id")
+        .eq("group_id", seller.group_id);
+
+      campaignIds = (groupCampaigns || []).map((gc) => gc.campaign_id);
+    }
+
+    let campaignsQuery = supabase
       .from("campaigns")
       .select("id, name, slug, status")
       .order("created_at", { ascending: false });
+
+    if (campaignIds !== null) {
+      if (campaignIds.length === 0) {
+        // Group has no campaigns assigned — return empty list
+        campaignsQuery = campaignsQuery.in("id", ["00000000-0000-0000-0000-000000000000"]);
+      } else {
+        campaignsQuery = campaignsQuery.in("id", campaignIds);
+      }
+    }
+
+    const { data: allCampaigns } = await campaignsQuery;
 
     // 3. Fetch campaign assignments for this seller
     const { data: assignments } = await supabase
@@ -101,7 +126,7 @@ export async function GET(
       };
     });
 
-    // 6. Build enriched campaigns list (all campaigns with assignment info)
+    // 6. Build enriched campaigns list
     const enrichedCampaigns = (allCampaigns || []).map((c) => {
       const assignment = assignmentMap[c.id];
       return {
@@ -117,9 +142,17 @@ export async function GET(
       };
     });
 
+    // 7. Fetch available groups for selector
+    const { data: groupsList } = await supabase
+      .from("seller_groups")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name", { ascending: true });
+
     return NextResponse.json({
       seller,
       campaigns: enrichedCampaigns,
+      groups: groupsList || [],
     });
   } catch (err) {
     console.error("Seller fetch error:", err);
@@ -172,7 +205,7 @@ export async function PUT(
       );
     }
 
-    const { full_name, email, new_password, is_active, campaigns } =
+    const { full_name, email, new_password, is_active, group_id, campaigns } =
       parsed.data;
 
     const serviceClient = createServiceRoleClient();
@@ -182,6 +215,7 @@ export async function PUT(
     if (full_name !== undefined) profileUpdate.full_name = full_name;
     if (email !== undefined) profileUpdate.email = email;
     if (is_active !== undefined) profileUpdate.is_active = is_active;
+    if (group_id !== undefined) profileUpdate.group_id = group_id;
 
     if (Object.keys(profileUpdate).length > 0) {
       // Check email uniqueness if changing
@@ -298,6 +332,88 @@ export async function PUT(
     return NextResponse.json({ seller: updatedSeller });
   } catch (err) {
     console.error("Seller update error:", err);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 },
+    );
+  }
+}
+
+// DELETE /api/sellers/[id] — soft-delete (deactivate + remove from group)
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createServerSupabaseClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile || profile.role !== "admin") {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    }
+
+    // Prevent self-deletion
+    if (id === user.id) {
+      return NextResponse.json(
+        { error: "No puedes desactivar tu propia cuenta" },
+        { status: 400 },
+      );
+    }
+
+    // Check for active reservations in active campaigns
+    const { data: activeReservations } = await supabase
+      .from("reservations")
+      .select("campaign_id, campaigns:campaign_id(name, status)")
+      .eq("seller_id", id)
+      .in("status", ["active", "confirmed"]);
+
+    const blockingReservations = (activeReservations || []).filter(
+      (r: Record<string, unknown>) => {
+        const campaign = r.campaigns as Record<string, unknown> | null;
+        return campaign?.status === "active";
+      },
+    );
+
+    if (blockingReservations.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No se puede desactivar: tiene reservaciones activas en campañas activas",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Soft delete: deactivate and remove from group
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ is_active: false, group_id: null })
+      .eq("id", id);
+
+    if (updateError) {
+      console.error("Seller delete error:", updateError);
+      return NextResponse.json(
+        { error: "Error al desactivar el vendedor" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Seller delete error:", err);
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },

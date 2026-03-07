@@ -65,6 +65,11 @@ export default function EditCampaignPage() {
   const [closeLoading, setCloseLoading] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
+  // Delete state
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const rangeSize =
     Math.max(0, parseInt(numberTo || "0") - parseInt(numberFrom || "0") + 1);
 
@@ -251,6 +256,24 @@ export default function EditCampaignPage() {
       setSorteoError("Error de conexión");
     }
     setCloseLoading(false);
+  }
+
+  async function handleDelete() {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        router.push("/admin");
+        router.refresh();
+      } else {
+        setDeleteError(data.error || "Error al eliminar la campaña");
+      }
+    } catch {
+      setDeleteError("Error de conexión");
+    }
+    setDeleteLoading(false);
   }
 
   function positionLabel(pos: number): string {
@@ -669,6 +692,56 @@ export default function EditCampaignPage() {
               </p>
             </div>
           )}
+
+          {/* Delete campaign — only for draft or closed */}
+          {(status === "draft" || status === "closed") && (
+            <div className="card space-y-3 border-red-200">
+              {!showDeleteConfirm ? (
+                <button
+                  type="button"
+                  className="w-full rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  Eliminar campaña
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-red-700">
+                    Esta acción es irreversible. Se eliminarán todos los datos
+                    de esta campaña incluyendo boletos, reservaciones y pagos.
+                  </p>
+                  {deleteError && (
+                    <p className="text-sm text-red-600">{deleteError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="btn-secondary flex-1"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      disabled={deleteLoading}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                      onClick={handleDelete}
+                      disabled={deleteLoading}
+                    >
+                      {deleteLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                          Eliminando...
+                        </span>
+                      ) : (
+                        "Confirmar eliminación"
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mt-6">
@@ -1061,6 +1134,56 @@ export default function EditCampaignPage() {
             )}
           </button>
         </div>
+
+        {/* Delete campaign — draft only in editable form */}
+        {status === "draft" && (
+          <div className="mt-6 card space-y-3 border-red-200">
+            {!showDeleteConfirm ? (
+              <button
+                type="button"
+                className="w-full rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Eliminar campaña
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-red-700">
+                  Esta acción es irreversible. Se eliminarán todos los datos
+                  de esta campaña incluyendo boletos y asignaciones.
+                </p>
+                {deleteError && (
+                  <p className="text-sm text-red-600">{deleteError}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary flex-1"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleteLoading}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                    onClick={handleDelete}
+                    disabled={deleteLoading}
+                  >
+                    {deleteLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Eliminando...
+                      </span>
+                    ) : (
+                      "Confirmar eliminación"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );

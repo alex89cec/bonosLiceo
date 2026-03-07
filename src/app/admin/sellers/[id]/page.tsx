@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Profile } from "@/types/database";
 
@@ -18,6 +18,7 @@ interface CampaignEntry {
 }
 
 export default function SellerDetailPage() {
+  const router = useRouter();
   const { id } = useParams<{ id: string }>();
 
   const [pageLoading, setPageLoading] = useState(true);
@@ -31,10 +32,17 @@ export default function SellerDetailPage() {
 
   const [sellerRole, setSellerRole] = useState<string>("seller");
   const [sellerCode, setSellerCode] = useState<string>("");
+  const [groupId, setGroupId] = useState<string | null>(null);
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Delete state
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchSeller() {
@@ -53,7 +61,9 @@ export default function SellerDetailPage() {
         setIsActive(s.is_active);
         setSellerRole(s.role);
         setSellerCode(s.seller_code || "");
+        setGroupId(s.group_id || null);
         setCampaigns(data.campaigns || []);
+        setGroups(data.groups || []);
         setPageLoading(false);
       } catch {
         setPageError("Error de conexión");
@@ -62,6 +72,67 @@ export default function SellerDetailPage() {
     }
     fetchSeller();
   }, [id]);
+
+  // When group changes, fetch that group's campaigns to preview
+  async function handleGroupChange(newGroupId: string | null) {
+    setGroupId(newGroupId);
+
+    if (!newGroupId) {
+      // No group — fetch all campaigns (legacy)
+      try {
+        const res = await fetch(`/api/sellers/${id}`);
+        const data = await res.json();
+        if (res.ok) {
+          setCampaigns(data.campaigns || []);
+        }
+      } catch {
+        // Silent
+      }
+      return;
+    }
+
+    // Fetch group detail to get assigned campaigns
+    try {
+      const res = await fetch(`/api/groups/${newGroupId}`);
+      const data = await res.json();
+      if (res.ok) {
+        const groupCampaigns: CampaignEntry[] = (data.assigned_campaigns || []).map(
+          (c: { id: string; name: string; slug: string; status: string }) => ({
+            campaign_id: c.id,
+            campaign_name: c.name,
+            campaign_slug: c.slug,
+            campaign_status: c.status,
+            assigned: true,
+            assignment_id: null,
+            max_tickets: null,
+            assigned_at: null,
+            sold_count: 0,
+          }),
+        );
+        setCampaigns(groupCampaigns);
+      }
+    } catch {
+      // Silent
+    }
+  }
+
+  async function handleDelete() {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/sellers/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        router.push("/admin/sellers");
+        router.refresh();
+      } else {
+        setDeleteError(data.error || "Error al desactivar el vendedor");
+      }
+    } catch {
+      setDeleteError("Error de conexión");
+    }
+    setDeleteLoading(false);
+  }
 
   function toggleCampaign(campaignId: string, assigned: boolean) {
     setCampaigns((prev) =>
@@ -91,6 +162,7 @@ export default function SellerDetailPage() {
       is_active: isActive,
     };
     if (newPassword) body.new_password = newPassword;
+    body.group_id = groupId;
     body.campaigns = campaigns.map((c) => ({
       campaign_id: c.campaign_id,
       assigned: c.assigned,
@@ -267,11 +339,61 @@ export default function SellerDetailPage() {
           </div>
         </div>
 
+        {/* Group assignment — only for sellers */}
+        {sellerRole === "seller" && groups.length > 0 && (
+          <div className="card space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+              Grupo
+            </h3>
+            <div>
+              <label
+                htmlFor="groupSelect"
+                className="mb-1.5 block text-sm font-semibold text-navy-700"
+              >
+                Grupo asignado
+              </label>
+              <select
+                id="groupSelect"
+                className="input-field"
+                value={groupId || ""}
+                onChange={(e) => handleGroupChange(e.target.value || null)}
+              >
+                <option value="">Sin grupo</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-navy-400">
+                Al cambiar de grupo, las campañas del grupo se asignarán automáticamente.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Campaign assignments */}
         <div className="card space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
-            Campañas
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+              Campañas
+            </h3>
+            {groupId && (
+              <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-600">
+                Gestionadas por grupo
+              </span>
+            )}
+          </div>
+
+          {groupId && (
+            <p className="text-xs text-navy-400">
+              Las campañas se asignan desde el{" "}
+              <Link href={`/admin/groups/${groupId}`} className="font-semibold text-blue-600 hover:underline">
+                grupo
+              </Link>
+              . Solo se muestran las del grupo.
+            </p>
+          )}
 
           {campaigns.length > 0 ? (
             <div className="space-y-3">
@@ -281,6 +403,8 @@ export default function SellerDetailPage() {
                   ? Math.min((c.sold_count / c.max_tickets!) * 100, 100)
                   : 0;
                 const atLimit = hasLimit && c.sold_count >= c.max_tickets!;
+                // If seller has a group, campaign toggles are read-only
+                const isGroupManaged = !!groupId;
 
                 return (
                   <div
@@ -321,32 +445,34 @@ export default function SellerDetailPage() {
                                 : "Cerrada"}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {c.assigned && c.sold_count > 0 && (
-                          <span
-                            className="text-xs text-navy-400"
-                            title="No se puede desasignar: tiene ventas activas"
-                          >
-                            🔒
+                      {!isGroupManaged && (
+                        <div className="flex items-center gap-2">
+                          {c.assigned && c.sold_count > 0 && (
+                            <span
+                              className="text-xs text-navy-400"
+                              title="No se puede desasignar: tiene ventas activas"
+                            >
+                              🔒
+                            </span>
+                          )}
+                          <span className="toggle-slider">
+                            <input
+                              className="sr-only"
+                              type="checkbox"
+                              checked={c.assigned}
+                              disabled={c.assigned && c.sold_count > 0}
+                              onChange={(e) =>
+                                toggleCampaign(c.campaign_id, e.target.checked)
+                              }
+                            />
+                            <span
+                              className={`slider ${c.assigned && c.sold_count > 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                            />
                           </span>
-                        )}
-                        <span className="toggle-slider">
-                          <input
-                            className="sr-only"
-                            type="checkbox"
-                            checked={c.assigned}
-                            disabled={c.assigned && c.sold_count > 0}
-                            onChange={(e) =>
-                              toggleCampaign(c.campaign_id, e.target.checked)
-                            }
-                          />
-                          <span
-                            className={`slider ${c.assigned && c.sold_count > 0 ? "opacity-50 cursor-not-allowed" : ""}`}
-                          />
-                        </span>
-                      </div>
+                        </div>
+                      )}
                     </div>
-                    {c.assigned && c.sold_count > 0 && (
+                    {!isGroupManaged && c.assigned && c.sold_count > 0 && (
                       <p className="mt-1 text-right text-xs text-navy-400">
                         No se puede desasignar (tiene {c.sold_count} venta
                         {c.sold_count > 1 ? "s" : ""})
@@ -416,7 +542,9 @@ export default function SellerDetailPage() {
             </div>
           ) : (
             <p className="py-4 text-center text-sm text-navy-400">
-              No hay campañas creadas
+              {groupId
+                ? "El grupo no tiene campañas asignadas"
+                : "No hay campañas creadas"}
             </p>
           )}
         </div>
@@ -449,6 +577,56 @@ export default function SellerDetailPage() {
             )}
           </button>
         </div>
+
+        {/* Delete seller */}
+        {sellerRole === "seller" && (
+          <div className="mt-6 card space-y-3 border-red-200">
+            {!showDeleteConfirm ? (
+              <button
+                type="button"
+                className="w-full rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-100"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                Desactivar vendedor
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-red-700">
+                  Se desactivará el vendedor y será removido de su grupo.
+                  No podrá acceder al sistema hasta ser reactivado.
+                </p>
+                {deleteError && (
+                  <p className="text-sm text-red-600">{deleteError}</p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary flex-1"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deleteLoading}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                    onClick={handleDelete}
+                    disabled={deleteLoading}
+                  >
+                    {deleteLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        Desactivando...
+                      </span>
+                    ) : (
+                      "Confirmar desactivación"
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );

@@ -35,6 +35,9 @@ export default async function AdminLayout({
           <a href="/admin" className="shrink-0 text-sm font-medium text-navy-600 hover:text-navy-800">
             Campañas
           </a>
+          <a href="/admin/groups" className="shrink-0 text-sm font-medium text-navy-400 hover:text-navy-600">
+            Grupos
+          </a>
           <a href="/admin/sellers" className="shrink-0 text-sm font-medium text-navy-400 hover:text-navy-600">
             Vendedores
           </a>

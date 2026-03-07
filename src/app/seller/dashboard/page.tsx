@@ -13,13 +13,16 @@ export default async function SellerDashboardPage() {
   // Auth is handled by layout, but just in case
   if (!user) return null;
 
-  const { data: profile } = await supabase
+  const { data: profileData } = await supabase
     .from("profiles")
-    .select("*")
+    .select("*, seller_group:group_id(name)")
     .eq("id", user.id)
     .single();
 
-  if (!profile) return null;
+  if (!profileData) return null;
+
+  const profile = profileData;
+  const groupName = (profileData.seller_group as { name: string } | null)?.name;
 
   // Get ticket stats for this seller (tickets they've sold/reserved)
   const { data: stats } = await supabase
@@ -163,6 +166,12 @@ export default async function SellerDashboardPage() {
                 <span className="font-mono font-semibold text-blue-600">
                   {profile.seller_code}
                 </span>
+              </p>
+            )}
+            {groupName && (
+              <p className="mt-0.5 text-sm text-navy-400">
+                Grupo:{" "}
+                <span className="font-semibold text-blue-600">{groupName}</span>
               </p>
             )}
             <p className="mt-0.5 truncate text-sm text-navy-400">

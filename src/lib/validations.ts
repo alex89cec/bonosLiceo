@@ -67,7 +67,13 @@ export const sorteoSchema = z.discriminatedUnion("mode", [
   }),
 ]);
 
+export const groupSchema = z.object({
+  name: z.string().min(1).max(200),
+  admin_id: z.string().uuid(),
+});
+
 export type ReserveTicketInput = z.infer<typeof reserveTicketSchema>;
 export type ReserveBatchInput = z.infer<typeof reserveBatchSchema>;
 export type CampaignInput = z.infer<typeof campaignSchema>;
 export type SorteoInput = z.infer<typeof sorteoSchema>;
+export type GroupInput = z.infer<typeof groupSchema>;
