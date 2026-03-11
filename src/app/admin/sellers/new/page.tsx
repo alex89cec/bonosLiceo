@@ -8,6 +8,7 @@ interface CreatedSeller {
   email: string;
   seller_code: string;
   temp_password: string;
+  email_sent: boolean;
 }
 
 export default function NewSellerPage() {
@@ -46,6 +47,7 @@ export default function NewSellerPage() {
         email: data.seller.email,
         seller_code: data.seller.seller_code,
         temp_password: data.temp_password,
+        email_sent: data.email_sent ?? false,
       });
       setLoading(false);
     } catch {
@@ -126,6 +128,49 @@ export default function NewSellerPage() {
               <p className="text-sm text-gray-500">{created.email}</p>
             </div>
           </div>
+
+          {/* Email status badge */}
+          {created.email_sent ? (
+            <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+              <span className="font-medium">
+                Email de bienvenida enviado a {created.email}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <span className="font-medium">
+                No se pudo enviar el email de bienvenida. Comparte las credenciales manualmente.
+              </span>
+            </div>
+          )}
 
           {/* Credentials box */}
           <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
