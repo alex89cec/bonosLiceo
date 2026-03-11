@@ -4,6 +4,7 @@ import {
   createServiceRoleClient,
 } from "@/lib/supabase/server";
 import { z } from "zod";
+import { sendWelcomeEmail } from "@/lib/email";
 
 const createSellerSchema = z.object({
   full_name: z.string().min(1, "Nombre requerido").max(200),
@@ -219,6 +220,23 @@ export async function POST(request: Request) {
       );
     }
 
+    // 8. Send welcome email (non-blocking — don't fail creation if email fails)
+    let emailSent = false;
+    try {
+      const emailResult = await sendWelcomeEmail(
+        full_name,
+        email,
+        tempPassword,
+        sellerCode,
+      );
+      emailSent = emailResult.success;
+      if (!emailResult.success) {
+        console.error("Welcome email failed:", emailResult.error);
+      }
+    } catch (emailErr) {
+      console.error("Welcome email error:", emailErr);
+    }
+
     return NextResponse.json(
       {
         seller: {
@@ -228,6 +246,7 @@ export async function POST(request: Request) {
           seller_code: sellerCode,
         },
         temp_password: tempPassword,
+        email_sent: emailSent,
       },
       { status: 201 },
     );

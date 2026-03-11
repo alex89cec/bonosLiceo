@@ -44,6 +44,12 @@ export default function SellerDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Email action state
+  const [emailAction, setEmailAction] = useState<string | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
   useEffect(() => {
     async function fetchSeller() {
       try {
@@ -132,6 +138,37 @@ export default function SellerDetailPage() {
       setDeleteError("Error de conexión");
     }
     setDeleteLoading(false);
+  }
+
+  async function handleEmailAction(action: "welcome" | "reset") {
+    setEmailAction(action);
+    setEmailLoading(true);
+    setEmailSuccess(null);
+    setEmailError(null);
+
+    try {
+      const res = await fetch(`/api/sellers/${id}/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        setEmailSuccess(
+          action === "welcome"
+            ? "Email de bienvenida enviado correctamente"
+            : "Email de reset de contraseña enviado correctamente",
+        );
+      } else {
+        setEmailError(data.error || "Error al enviar el email");
+      }
+    } catch {
+      setEmailError("Error de conexión");
+    }
+
+    setEmailLoading(false);
+    setEmailAction(null);
   }
 
   function toggleCampaign(campaignId: string, assigned: boolean) {
@@ -577,6 +614,108 @@ export default function SellerDetailPage() {
             )}
           </button>
         </div>
+
+        {/* Email actions — only for sellers */}
+        {sellerRole === "seller" && (
+          <div className="card space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+              Acciones de email
+            </h3>
+            <p className="text-xs text-navy-400">
+              Envía un email al vendedor con sus credenciales de acceso o una nueva contraseña temporal.
+            </p>
+
+            {emailSuccess && (
+              <div className="flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                <span className="font-medium">{emailSuccess}</span>
+              </div>
+            )}
+            {emailError && (
+              <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                {emailError}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                className="btn-gold flex-1"
+                disabled={emailLoading}
+                onClick={() => handleEmailAction("welcome")}
+              >
+                {emailLoading && emailAction === "welcome" ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
+                    Enviando...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                      />
+                    </svg>
+                    Reenviar bienvenida
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary flex-1"
+                disabled={emailLoading}
+                onClick={() => handleEmailAction("reset")}
+              >
+                {emailLoading && emailAction === "reset" ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
+                    Enviando...
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                      />
+                    </svg>
+                    Resetear contraseña
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Delete seller */}
         {sellerRole === "seller" && (
