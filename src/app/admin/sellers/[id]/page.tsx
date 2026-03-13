@@ -303,31 +303,65 @@ export default function SellerDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
-        <h2 className="text-xl font-bold">{fullName}</h2>
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-            sellerRole === "admin"
-              ? "bg-gold-500 text-white"
-              : "bg-gold-100 text-gold-700"
-          }`}
-        >
-          {sellerRole === "admin" ? "Admin" : "Vendedor"}
-        </span>
-        {sellerCode && (
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold">{fullName}</h2>
           <span
-            className={`rounded-lg px-3 py-1 font-mono text-sm font-semibold ${
+            className={`rounded-full px-2 py-0.5 text-xs font-bold ${
               sellerRole === "admin"
-                ? "bg-gold-400 text-navy-800"
-                : "bg-gray-100 text-gray-600"
+                ? "bg-gold-500 text-white"
+                : "bg-gold-100 text-gold-700"
             }`}
           >
-            {sellerCode}
+            {sellerRole === "admin" ? "Admin" : "Vendedor"}
           </span>
-        )}
+          {sellerCode && (
+            <span
+              className={`rounded-lg px-3 py-1 font-mono text-sm font-semibold ${
+                sellerRole === "admin"
+                  ? "bg-gold-400 text-navy-800"
+                  : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              {sellerCode}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Link href="/admin/sellers" className="btn-secondary px-3 py-1.5 text-xs text-center">
+            Cancelar
+          </Link>
+          <button
+            form="seller-form"
+            type="submit"
+            className="btn-primary px-3 py-1.5 text-xs"
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Guardando...
+              </span>
+            ) : (
+              "Guardar"
+            )}
+          </button>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Error / success messages */}
+      {error && (
+        <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-700">
+          Cambios guardados correctamente
+        </div>
+      )}
+
+      <form id="seller-form" onSubmit={handleSubmit} className="space-y-6">
         {/* Profile edit card */}
         <div className="card space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
@@ -477,7 +511,9 @@ export default function SellerDetailPage() {
                   : 0;
                 const atLimit = hasLimit && c.sold_count >= c.max_tickets!;
                 // If seller has a group, campaign toggles are read-only
-                const isGroupManaged = !!groupId;
+                // Can unassign if: no sales, or campaign is closed/archived/sorted
+                const isClosedOrArchived = ["closed", "archived", "sorted"].includes(c.campaign_status);
+                const canUnassign = c.sold_count === 0 || isClosedOrArchived;
 
                 return (
                   <div
@@ -518,34 +554,32 @@ export default function SellerDetailPage() {
                                 : "Cerrada"}
                         </span>
                       </div>
-                      {!isGroupManaged && (
-                        <div className="flex items-center gap-2">
-                          {c.assigned && c.sold_count > 0 && (
-                            <span
-                              className="text-xs text-navy-400"
-                              title="No se puede desasignar: tiene ventas activas"
-                            >
-                              🔒
-                            </span>
-                          )}
-                          <span className="toggle-slider">
-                            <input
-                              className="sr-only"
-                              type="checkbox"
-                              checked={c.assigned}
-                              disabled={c.assigned && c.sold_count > 0}
-                              onChange={(e) =>
-                                toggleCampaign(c.campaign_id, e.target.checked)
-                              }
-                            />
-                            <span
-                              className={`slider ${c.assigned && c.sold_count > 0 ? "opacity-50 cursor-not-allowed" : ""}`}
-                            />
+                      <div className="flex items-center gap-2">
+                        {c.assigned && !canUnassign && (
+                          <span
+                            className="text-xs text-navy-400"
+                            title="No se puede desasignar: tiene ventas activas"
+                          >
+                            🔒
                           </span>
-                        </div>
-                      )}
+                        )}
+                        <label className="toggle-slider">
+                          <input
+                            className="sr-only"
+                            type="checkbox"
+                            checked={c.assigned}
+                            disabled={c.assigned && !canUnassign}
+                            onChange={(e) =>
+                              toggleCampaign(c.campaign_id, e.target.checked)
+                            }
+                          />
+                          <span
+                            className={`slider ${c.assigned && !canUnassign ? "opacity-50 cursor-not-allowed" : ""}`}
+                          />
+                        </label>
+                      </div>
                     </div>
-                    {!isGroupManaged && c.assigned && c.sold_count > 0 && (
+                    {c.assigned && !canUnassign && (
                       <p className="mt-1 text-right text-xs text-navy-400">
                         No se puede desasignar (tiene {c.sold_count} venta
                         {c.sold_count > 1 ? "s" : ""})
@@ -620,35 +654,6 @@ export default function SellerDetailPage() {
                 : "No hay campañas creadas"}
             </p>
           )}
-        </div>
-
-        {/* Error / success */}
-        {error && (
-          <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="rounded-xl bg-green-50 p-3 text-sm text-green-700">
-            Cambios guardados correctamente
-          </div>
-        )}
-
-        {/* Submit */}
-        <div className="flex gap-3">
-          <Link href="/admin/sellers" className="btn-secondary flex-1 text-center">
-            Cancelar
-          </Link>
-          <button className="btn-primary flex-1" disabled={loading}>
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Guardando...
-              </span>
-            ) : (
-              "Guardar cambios"
-            )}
-          </button>
         </div>
 
         {/* Email actions — only for sellers */}

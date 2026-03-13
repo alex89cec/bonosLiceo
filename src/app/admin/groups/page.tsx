@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { GROUP_COLORS, getGroupColor } from "@/lib/group-colors";
 
 interface GroupEntry {
   id: string;
   name: string;
+  color: string;
   is_active: boolean;
   admin: { full_name: string; email: string } | null;
   member_count: number;
@@ -23,6 +25,7 @@ export default function AdminGroupsPage() {
   const [newName, setNewName] = useState("");
   const [admins, setAdmins] = useState<{ id: string; full_name: string }[]>([]);
   const [selectedAdmin, setSelectedAdmin] = useState("");
+  const [selectedColor, setSelectedColor] = useState("blue");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -59,11 +62,12 @@ export default function AdminGroupsPage() {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), admin_id: selectedAdmin }),
+        body: JSON.stringify({ name: newName.trim(), admin_id: selectedAdmin, color: selectedColor }),
       });
       const data = await res.json();
       if (res.ok) {
         setNewName("");
+        setSelectedColor("blue");
         setShowForm(false);
         fetchGroups();
       } else {
@@ -140,6 +144,27 @@ export default function AdminGroupsPage() {
               ))}
             </select>
           </div>
+          {/* Color picker */}
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-navy-700">
+              Color del grupo
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {GROUP_COLORS.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => setSelectedColor(c.key)}
+                  className={`h-8 w-8 rounded-full transition-all ${c.dot} ${
+                    selectedColor === c.key
+                      ? "ring-2 ring-navy-700 ring-offset-2"
+                      : "hover:scale-110"
+                  }`}
+                  title={c.key}
+                />
+              ))}
+            </div>
+          </div>
           {createError && (
             <p className="text-sm text-red-600">{createError}</p>
           )}
@@ -171,6 +196,7 @@ export default function AdminGroupsPage() {
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
+                    <span className={`inline-block h-3 w-3 rounded-full ${getGroupColor(g.color).dot}`} />
                     <h3 className="font-semibold">{g.name}</h3>
                     {!g.is_active && (
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600">

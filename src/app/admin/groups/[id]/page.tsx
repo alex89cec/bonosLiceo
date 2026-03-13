@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { GROUP_COLORS, getGroupColor } from "@/lib/group-colors";
 
 interface Member {
   id: string;
@@ -36,6 +37,7 @@ export default function GroupDetailPage() {
   const [pageError, setPageError] = useState<string | null>(null);
 
   const [groupName, setGroupName] = useState("");
+  const [groupColor, setGroupColor] = useState("blue");
   const [adminName, setAdminName] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [assignedCampaigns, setAssignedCampaigns] = useState<AssignedCampaign[]>([]);
@@ -48,6 +50,8 @@ export default function GroupDetailPage() {
 
   // Add member
   const [selectedSeller, setSelectedSeller] = useState("");
+  const [sellerSearch, setSellerSearch] = useState("");
+  const [sellerDropdownOpen, setSellerDropdownOpen] = useState(false);
   const [addingMember, setAddingMember] = useState(false);
 
   // Add campaign
@@ -80,6 +84,7 @@ export default function GroupDetailPage() {
 
       setGroupName(data.group.name);
       setEditName(data.group.name);
+      setGroupColor(data.group.color || "blue");
       setAdminName(data.group.admin?.full_name || "—");
       setMembers(data.members || []);
       setAssignedCampaigns(data.assigned_campaigns || []);
@@ -248,6 +253,39 @@ export default function GroupDetailPage() {
     setSaving(false);
   }
 
+  async function handleColorChange(newColor: string) {
+    setGroupColor(newColor);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/groups/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ color: newColor }),
+      });
+      if (res.ok) {
+        setSuccess("Color actualizado");
+      } else {
+        const data = await res.json();
+        setError(data.error || "Error al actualizar color");
+      }
+    } catch {
+      setError("Error de conexión");
+    }
+  }
+
+  // Filtered sellers for searchable dropdown
+  const filteredSellers = useMemo(() => {
+    if (!sellerSearch.trim()) return availableSellers;
+    const q = sellerSearch.toLowerCase().trim();
+    return availableSellers.filter(
+      (s) =>
+        s.full_name.toLowerCase().includes(q) ||
+        s.email.toLowerCase().includes(q) ||
+        s.seller_code.toLowerCase().includes(q),
+    );
+  }, [availableSellers, sellerSearch]);
+
   if (pageLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -331,6 +369,28 @@ export default function GroupDetailPage() {
         </div>
       )}
 
+      {/* Color picker */}
+      <div className="card mb-6 space-y-3">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+          Color del grupo
+        </h3>
+        <div className="flex flex-wrap gap-3">
+          {GROUP_COLORS.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => handleColorChange(c.key)}
+              className={`h-8 w-8 rounded-full transition-all ${c.dot} ${
+                groupColor === c.key
+                  ? "ring-2 ring-navy-700 ring-offset-2"
+                  : "hover:scale-110"
+              }`}
+              title={c.key}
+            />
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-6">
         {/* Members section */}
         <div className="card space-y-4">
@@ -377,32 +437,80 @@ export default function GroupDetailPage() {
             </p>
           )}
 
-          {/* Add member */}
+          {/* Add member — searchable */}
           {availableSellers.length > 0 && (
-            <div className="flex items-end gap-2 border-t border-navy-100 pt-4">
-              <div className="flex-1">
-                <label className="mb-1.5 block text-xs font-semibold text-navy-500">
-                  Agregar vendedor
-                </label>
-                <select
-                  className="input-field text-sm"
-                  value={selectedSeller}
-                  onChange={(e) => setSelectedSeller(e.target.value)}
-                >
-                  {availableSellers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.full_name} ({s.seller_code})
-                    </option>
-                  ))}
-                </select>
+            <div className="border-t border-navy-100 pt-4">
+              <label className="mb-1.5 block text-xs font-semibold text-navy-500">
+                Agregar vendedor
+              </label>
+              <div className="relative">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input
+                      type="text"
+                      className="input-field pl-10 text-sm"
+                      placeholder="Buscar vendedor..."
+                      value={sellerSearch}
+                      onChange={(e) => {
+                        setSellerSearch(e.target.value);
+                        setSellerDropdownOpen(true);
+                        setSelectedSeller("");
+                      }}
+                      onFocus={() => setSellerDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setSellerDropdownOpen(false), 150)}
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      handleAddMember();
+                      setSellerSearch("");
+                      setSellerDropdownOpen(false);
+                    }}
+                    className="btn-primary whitespace-nowrap text-sm"
+                    disabled={addingMember || !selectedSeller}
+                  >
+                    {addingMember ? "..." : "+ Agregar"}
+                  </button>
+                </div>
+                {sellerDropdownOpen && filteredSellers.length > 0 && (
+                  <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-navy-200 bg-white shadow-lg">
+                    {filteredSellers.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-gold-50 ${
+                          selectedSeller === s.id ? "bg-gold-50 font-semibold" : ""
+                        }`}
+                        onClick={() => {
+                          setSelectedSeller(s.id);
+                          setSellerSearch(s.full_name);
+                          setSellerDropdownOpen(false);
+                        }}
+                      >
+                        <span>{s.full_name}</span>
+                        <span className="ml-2 font-mono text-xs text-navy-400">
+                          {s.seller_code}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {sellerDropdownOpen && sellerSearch.trim() && filteredSellers.length === 0 && (
+                  <div className="absolute z-10 mt-1 w-full rounded-xl border border-navy-200 bg-white p-3 text-center text-sm text-navy-400 shadow-lg">
+                    No se encontraron vendedores
+                  </div>
+                )}
               </div>
-              <button
-                onClick={handleAddMember}
-                className="btn-primary whitespace-nowrap text-sm"
-                disabled={addingMember || !selectedSeller}
-              >
-                {addingMember ? "..." : "+ Agregar"}
-              </button>
             </div>
           )}
         </div>

@@ -85,17 +85,24 @@ export async function GET(
     }
 
     // 2. Determine which campaigns to show
-    // If seller has a group, only show campaigns assigned to their group
-    // If no group, show all campaigns (legacy behavior)
+    // Admins see all campaigns (they are auto-assigned to everything)
+    // Sellers with a group see only campaigns assigned to their group
+    // Sellers without a group see no campaigns
     let campaignIds: string[] | null = null;
 
-    if (seller.group_id) {
+    if (seller.role === "admin") {
+      // Admins see all campaigns — leave campaignIds as null (no filter)
+      campaignIds = null;
+    } else if (seller.group_id) {
       const { data: groupCampaigns } = await supabase
         .from("campaign_groups")
         .select("campaign_id")
         .eq("group_id", seller.group_id);
 
       campaignIds = (groupCampaigns || []).map((gc) => gc.campaign_id);
+    } else {
+      // Seller without a group — no campaigns to show
+      campaignIds = [];
     }
 
     let campaignsQuery = supabase
