@@ -47,14 +47,14 @@ export default async function AdminSellersPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{admin.full_name}</h3>
-                      <span className="rounded-full bg-navy-100 px-2 py-0.5 text-xs font-medium text-navy-600">
+                      <span className="rounded-full bg-gold-500 px-2 py-0.5 text-xs font-bold text-white">
                         Admin
                       </span>
                     </div>
                     <p className="text-sm text-gray-500">{admin.email}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="rounded-lg bg-navy-50 px-3 py-1 font-mono text-sm font-semibold text-navy-600">
+                    <span className="rounded-lg bg-gold-400 px-3 py-1 font-mono text-sm font-bold text-navy-800">
                       {admin.seller_code || "—"}
                     </span>
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -104,7 +104,7 @@ export default async function AdminSellersPage() {
                   <p className="text-sm text-gray-500">{seller.email}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="rounded-lg bg-navy-50 px-3 py-1 font-mono text-sm font-semibold text-navy-600">
+                  <span className="rounded-lg bg-gray-100 px-3 py-1 font-mono text-sm font-semibold text-gray-600">
                     {seller.seller_code}
                   </span>
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

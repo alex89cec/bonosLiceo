@@ -5,6 +5,22 @@ import {
 } from "@/lib/supabase/server";
 import { z } from "zod";
 
+const convertRoleSchema = z.object({
+  action: z.literal("convert_role"),
+  target_role: z.enum(["admin", "seller"]),
+});
+
+function generateSellerCode(name: string): string {
+  const base = name
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z]/g, "")
+    .slice(0, 4);
+  const num = String(Math.floor(Math.random() * 900) + 100);
+  return (base || "SELL") + num;
+}
+
 const updateSellerSchema = z.object({
   full_name: z.string().min(1).max(200).optional(),
   email: z
@@ -153,6 +169,7 @@ export async function GET(
       seller,
       campaigns: enrichedCampaigns,
       groups: groupsList || [],
+      current_user_id: user.id,
     });
   } catch (err) {
     console.error("Seller fetch error:", err);
@@ -414,6 +431,167 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Seller delete error:", err);
+    return NextResponse.json(
+      { error: "Error interno del servidor" },
+      { status: 500 },
+    );
+  }
+}
+
+// PATCH /api/sellers/[id] — convert role (seller ↔ admin)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createServerSupabaseClient();
+
+    // Auth check
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    // Verify admin role
+    const { data: currentProfile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (!currentProfile || currentProfile.role !== "admin") {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+    }
+
+    // Parse body
+    const body = await request.json();
+    const parsed = convertRoleSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Datos inválidos" },
+        { status: 400 },
+      );
+    }
+
+    const { target_role } = parsed.data;
+
+    // Prevent self-conversion
+    if (id === user.id) {
+      return NextResponse.json(
+        { error: "No puedes convertir tu propia cuenta" },
+        { status: 400 },
+      );
+    }
+
+    // Fetch target profile
+    const { data: targetProfile, error: fetchError } = await supabase
+      .from("profiles")
+      .select("id, role, group_id, seller_code, full_name")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !targetProfile) {
+      return NextResponse.json(
+        { error: "Usuario no encontrado" },
+        { status: 404 },
+      );
+    }
+
+    // Can't convert if already that role
+    if (targetProfile.role === target_role) {
+      return NextResponse.json(
+        { error: "El usuario ya tiene el rol solicitado" },
+        { status: 400 },
+      );
+    }
+
+    // Seller → Admin: block if has a group
+    if (targetProfile.role === "seller" && targetProfile.group_id !== null) {
+      return NextResponse.json(
+        {
+          error:
+            "No se puede convertir: el vendedor pertenece a un grupo. Remuévalo del grupo primero.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // Both directions: block if has active/confirmed reservations in active campaigns
+    const { data: activeReservations } = await supabase
+      .from("reservations")
+      .select("campaign_id, campaigns:campaign_id(name, status)")
+      .eq("seller_id", id)
+      .in("status", ["active", "confirmed"]);
+
+    const blockingReservations = (activeReservations || []).filter(
+      (r: Record<string, unknown>) => {
+        const campaign = r.campaigns as Record<string, unknown> | null;
+        return campaign?.status === "active";
+      },
+    );
+
+    if (blockingReservations.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "No se puede convertir: tiene reservaciones activas en campañas activas",
+        },
+        { status: 409 },
+      );
+    }
+
+    const serviceClient = createServiceRoleClient();
+    const profileUpdate: Record<string, unknown> = { role: target_role };
+
+    if (target_role === "seller") {
+      // Admin → Seller: remove from all campaign_sellers (admin was auto-assigned)
+      await serviceClient
+        .from("campaign_sellers")
+        .delete()
+        .eq("seller_id", id);
+
+      // Generate seller_code if null
+      if (!targetProfile.seller_code) {
+        profileUpdate.seller_code = generateSellerCode(
+          targetProfile.full_name,
+        );
+      }
+    }
+
+    // Update profile role
+    // For seller→admin: DB trigger trg_auto_assign_admin_to_campaigns fires automatically
+    const { error: updateError } = await serviceClient
+      .from("profiles")
+      .update(profileUpdate)
+      .eq("id", id);
+
+    if (updateError) {
+      console.error("Role conversion error:", updateError);
+      return NextResponse.json(
+        { error: "Error al convertir el rol" },
+        { status: 500 },
+      );
+    }
+
+    // Update auth user_metadata.role for consistency
+    await serviceClient.auth.admin.updateUserById(id, {
+      user_metadata: { role: target_role },
+    });
+
+    // Fetch updated profile
+    const { data: updatedSeller } = await serviceClient
+      .from("profiles")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    return NextResponse.json({ seller: updatedSeller });
+  } catch (err) {
+    console.error("Role conversion error:", err);
     return NextResponse.json(
       { error: "Error interno del servidor" },
       { status: 500 },
