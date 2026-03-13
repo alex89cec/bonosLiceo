@@ -70,6 +70,7 @@ export const sorteoSchema = z.discriminatedUnion("mode", [
 export const groupSchema = z.object({
   name: z.string().min(1).max(200),
   admin_id: z.string().uuid(),
+  color: z.string().min(1).max(20).optional().default("blue"),
 });
 
 export type ReserveTicketInput = z.infer<typeof reserveTicketSchema>;

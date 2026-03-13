@@ -6,6 +6,7 @@ const updateGroupSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   admin_id: z.string().uuid().optional(),
   is_active: z.boolean().optional(),
+  color: z.string().min(1).max(20).optional(),
 });
 
 // GET /api/groups/[id] — group detail with members + assigned campaigns
@@ -138,6 +139,7 @@ export async function PUT(
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
     if (parsed.data.admin_id !== undefined) updates.admin_id = parsed.data.admin_id;
     if (parsed.data.is_active !== undefined) updates.is_active = parsed.data.is_active;
+    if (parsed.data.color !== undefined) updates.color = parsed.data.color;
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: "Sin cambios" }, { status: 400 });

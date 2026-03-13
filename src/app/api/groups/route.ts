@@ -123,6 +123,7 @@ export async function POST(request: NextRequest) {
       .insert({
         name: parsed.data.name,
         admin_id: parsed.data.admin_id,
+        color: parsed.data.color,
       })
       .select()
       .single();
