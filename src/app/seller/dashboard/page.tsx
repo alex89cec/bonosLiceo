@@ -24,22 +24,24 @@ export default async function SellerDashboardPage() {
   const profile = profileData;
   const groupName = (profileData.seller_group as { name: string } | null)?.name;
 
-  // Get ticket stats for this seller (tickets they've sold/reserved)
+  // Get ticket stats for this seller — only from active campaigns
   const { data: stats } = await supabase
     .from("tickets")
-    .select("status")
-    .eq("seller_id", user.id);
+    .select("status, campaigns:campaign_id !inner (status)")
+    .eq("seller_id", user.id)
+    .eq("campaigns.status", "active");
 
   const counts = {
     reserved: stats?.filter((t) => t.status === "reserved").length || 0,
     sold: stats?.filter((t) => t.status === "sold").length || 0,
   };
 
-  // Get total sales amount from confirmed/completed payments
+  // Get total sales amount from confirmed/completed payments — only active campaigns
   const { data: sellerPayments } = await supabase
     .from("reservations")
-    .select("payments (amount, status)")
-    .eq("seller_id", user.id);
+    .select("payments (amount, status), campaigns:campaign_id !inner (status)")
+    .eq("seller_id", user.id)
+    .eq("campaigns.status", "active");
 
   let totalSales = 0;
   for (const r of sellerPayments || []) {
@@ -61,25 +63,26 @@ export default async function SellerDashboardPage() {
   }[] = [];
 
   if (profile.role === "admin") {
-    // Admins can sell from any campaign
+    // Admins can sell from any active campaign
     const { data: allCampaigns } = await supabase
       .from("campaigns")
       .select("id, name, slug, status, ticket_price")
-      .in("status", ["active", "draft"])
+      .eq("status", "active")
       .order("created_at", { ascending: false });
 
     campaigns = allCampaigns || [];
   } else {
-    // Sellers only see assigned campaigns
+    // Sellers only see assigned active campaigns
     const { data: assignments } = await supabase
       .from("campaign_sellers")
       .select(
         `
         campaign_id,
-        campaigns:campaign_id (id, name, slug, status, ticket_price)
+        campaigns:campaign_id !inner (id, name, slug, status, ticket_price)
       `,
       )
-      .eq("seller_id", user.id);
+      .eq("seller_id", user.id)
+      .eq("campaigns.status", "active");
 
     campaigns =
       assignments
@@ -96,7 +99,7 @@ export default async function SellerDashboardPage() {
         .filter(Boolean) || [];
   }
 
-  // Get recent reservations with full details including payments and installments
+  // Get recent reservations with full details — only from active campaigns
   const { data: reservations } = await supabase
     .from("reservations")
     .select(
@@ -106,11 +109,12 @@ export default async function SellerDashboardPage() {
       created_at,
       tickets:ticket_id (number),
       buyers:buyer_id (email, full_name),
-      campaigns:campaign_id (name),
+      campaigns:campaign_id !inner (name, status),
       payments (id, amount, payment_mode, status, installments (id, number, amount, due_date, paid_at, status))
     `,
     )
     .eq("seller_id", user.id)
+    .eq("campaigns.status", "active")
     .order("created_at", { ascending: false })
     .limit(20);
 

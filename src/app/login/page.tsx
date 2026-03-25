@@ -13,6 +13,7 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -32,6 +33,13 @@ function LoginForm() {
       setError(authError.message);
       setLoading(false);
       return;
+    }
+
+    // Set remember_me cookie (7 days) or clear it
+    if (rememberMe) {
+      document.cookie = `remember_me=1; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure`;
+    } else {
+      document.cookie = "remember_me=; path=/; max-age=0; SameSite=Lax; Secure";
     }
 
     // Check profile for role and must_change_password
@@ -102,6 +110,25 @@ function LoginForm() {
             autoComplete="current-password"
           />
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2">
+          <span className={`flex h-4 w-4 items-center justify-center rounded border ${rememberMe ? "border-navy-600 bg-navy-600" : "border-gray-300 bg-white"}`}>
+            {rememberMe && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            )}
+          </span>
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="sr-only"
+          />
+          <span className="text-sm text-navy-600">
+            Recuérdame por 7 días
+          </span>
+        </label>
 
         {error && (
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">

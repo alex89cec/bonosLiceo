@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { campaignSchema } from "@/lib/validations";
 
 // Vercel serverless max duration (seconds). Free=10, Pro=60.
@@ -266,6 +266,23 @@ export async function DELETE(
         { error: "Acceso denegado. Solo administradores." },
         { status: 403 },
       );
+    }
+
+    // Clean up flyer from storage if exists
+    const { data: campaign } = await supabase
+      .from("campaigns")
+      .select("flyer_url")
+      .eq("id", id)
+      .single();
+
+    if (campaign?.flyer_url) {
+      const marker = "/storage/v1/object/public/campaign-flyers/";
+      const idx = campaign.flyer_url.indexOf(marker);
+      if (idx !== -1) {
+        const storagePath = campaign.flyer_url.substring(idx + marker.length);
+        const serviceClient = createServiceRoleClient();
+        await serviceClient.storage.from("campaign-flyers").remove([storagePath]);
+      }
     }
 
     const { error: rpcError } = await supabase.rpc("delete_campaign", {
