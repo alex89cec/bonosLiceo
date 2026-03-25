@@ -97,7 +97,7 @@ export default async function SellerDashboardPage() {
         .filter(Boolean) || [];
   }
 
-  // Get recent reservations with full details including payments and installments
+  // Get recent reservations with full details — only from active campaigns
   const { data: reservations } = await supabase
     .from("reservations")
     .select(
@@ -107,11 +107,12 @@ export default async function SellerDashboardPage() {
       created_at,
       tickets:ticket_id (number),
       buyers:buyer_id (email, full_name),
-      campaigns:campaign_id (name),
+      campaigns:campaign_id !inner (name, status),
       payments (id, amount, payment_mode, status, installments (id, number, amount, due_date, paid_at, status))
     `,
     )
     .eq("seller_id", user.id)
+    .eq("campaigns.status", "active")
     .order("created_at", { ascending: false })
     .limit(20);
 
