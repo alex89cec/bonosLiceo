@@ -12,6 +12,10 @@ export async function updateSession(request: NextRequest) {
 
   let supabaseResponse = NextResponse.next({ request });
 
+  // Check if user opted for "remember me" (7-day session)
+  const rememberMe = request.cookies.get("remember_me")?.value === "1";
+  const SESSION_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+
   try {
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
@@ -29,9 +33,18 @@ export async function updateSession(request: NextRequest) {
             request.cookies.set(name, value),
           );
           supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            // Apply session persistence based on remember_me preference
+            const cookieOptions = { ...options };
+            if (rememberMe) {
+              cookieOptions.maxAge = SESSION_MAX_AGE;
+            } else {
+              // Session cookie — expires when browser closes
+              delete cookieOptions.maxAge;
+              delete cookieOptions.expires;
+            }
+            supabaseResponse.cookies.set(name, value, cookieOptions);
+          });
         },
       },
     });

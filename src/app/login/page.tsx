@@ -13,6 +13,7 @@ function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -32,6 +33,13 @@ function LoginForm() {
       setError(authError.message);
       setLoading(false);
       return;
+    }
+
+    // Set remember_me cookie (7 days) or clear it
+    if (rememberMe) {
+      document.cookie = `remember_me=1; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure`;
+    } else {
+      document.cookie = "remember_me=; path=/; max-age=0; SameSite=Lax; Secure";
     }
 
     // Check profile for role and must_change_password
@@ -102,6 +110,18 @@ function LoginForm() {
             autoComplete="current-password"
           />
         </div>
+
+        <label className="flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            className="h-4 w-4 rounded border-navy-300 accent-gold-500"
+          />
+          <span className="text-sm text-navy-600">
+            Recuérdame por 7 días
+          </span>
+        </label>
 
         {error && (
           <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">

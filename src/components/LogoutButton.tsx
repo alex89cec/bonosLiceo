@@ -12,6 +12,8 @@ export default function LogoutButton() {
     setLoading(true);
     const supabase = createClient();
     await supabase.auth.signOut();
+    // Clear remember_me cookie
+    document.cookie = "remember_me=; path=/; max-age=0; SameSite=Lax; Secure";
     router.push("/login");
     router.refresh();
   }
