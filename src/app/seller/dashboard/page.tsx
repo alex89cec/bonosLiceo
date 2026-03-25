@@ -61,25 +61,26 @@ export default async function SellerDashboardPage() {
   }[] = [];
 
   if (profile.role === "admin") {
-    // Admins can sell from any campaign
+    // Admins can sell from any active campaign
     const { data: allCampaigns } = await supabase
       .from("campaigns")
       .select("id, name, slug, status, ticket_price")
-      .in("status", ["active", "draft"])
+      .eq("status", "active")
       .order("created_at", { ascending: false });
 
     campaigns = allCampaigns || [];
   } else {
-    // Sellers only see assigned campaigns
+    // Sellers only see assigned active campaigns
     const { data: assignments } = await supabase
       .from("campaign_sellers")
       .select(
         `
         campaign_id,
-        campaigns:campaign_id (id, name, slug, status, ticket_price)
+        campaigns:campaign_id !inner (id, name, slug, status, ticket_price)
       `,
       )
-      .eq("seller_id", user.id);
+      .eq("seller_id", user.id)
+      .eq("campaigns.status", "active");
 
     campaigns =
       assignments
