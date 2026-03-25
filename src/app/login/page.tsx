@@ -112,11 +112,18 @@ function LoginForm() {
         </div>
 
         <label className="flex cursor-pointer items-center gap-2">
+          <span className={`flex h-4 w-4 items-center justify-center rounded border ${rememberMe ? "border-navy-600 bg-navy-600" : "border-gray-300 bg-white"}`}>
+            {rememberMe && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-white" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            )}
+          </span>
           <input
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-3.5 w-3.5 rounded-sm border-gray-300 text-navy-600 focus:ring-0"
+            className="sr-only"
           />
           <span className="text-sm text-navy-600">
             Recuérdame por 7 días
