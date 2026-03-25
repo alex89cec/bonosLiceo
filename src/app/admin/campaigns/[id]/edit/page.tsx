@@ -70,6 +70,11 @@ export default function EditCampaignPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // Flyer state
+  const [flyerUrl, setFlyerUrl] = useState<string | null>(null);
+  const [flyerUploading, setFlyerUploading] = useState(false);
+  const [flyerError, setFlyerError] = useState<string | null>(null);
+
   const rangeSize =
     Math.max(0, parseInt(numberTo || "0") - parseInt(numberFrom || "0") + 1);
 
@@ -102,6 +107,7 @@ export default function EditCampaignPage() {
         setInstallmentsEnabled(c.installments_enabled);
         setInstallmentsCount(String(c.installments_count));
         setStatus(c.status);
+        setFlyerUrl(c.flyer_url || null);
 
         setPageLoading(false);
       } catch {
@@ -274,6 +280,64 @@ export default function EditCampaignPage() {
       setDeleteError("Error de conexión");
     }
     setDeleteLoading(false);
+  }
+
+  async function handleFlyerUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Client-side validation
+    if (!file.type.startsWith("image/")) {
+      setFlyerError("Solo se permiten imágenes (JPEG, PNG, WebP)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setFlyerError("El archivo es demasiado grande. Máximo 5MB.");
+      return;
+    }
+
+    setFlyerUploading(true);
+    setFlyerError(null);
+
+    const formData = new FormData();
+    formData.append("flyer", file);
+
+    try {
+      const res = await fetch(`/api/campaigns/${id}/flyer`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFlyerUrl(data.flyer_url);
+      } else {
+        setFlyerError(data.error || "Error al subir el flyer");
+      }
+    } catch {
+      setFlyerError("Error de conexión al subir el flyer");
+    }
+    setFlyerUploading(false);
+    // Reset the input so the same file can be re-selected
+    e.target.value = "";
+  }
+
+  async function handleFlyerRemove() {
+    setFlyerUploading(true);
+    setFlyerError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/flyer`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setFlyerUrl(null);
+      } else {
+        const data = await res.json();
+        setFlyerError(data.error || "Error al eliminar el flyer");
+      }
+    } catch {
+      setFlyerError("Error de conexión al eliminar el flyer");
+    }
+    setFlyerUploading(false);
   }
 
   function positionLabel(pos: number): string {
@@ -456,6 +520,70 @@ export default function EditCampaignPage() {
               <p className="text-sm text-navy-600">{description}</p>
             </div>
           )}
+
+          {/* ─── FLYER SECTION ─── */}
+          <div className="card space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+              Flyer
+            </h3>
+
+            {/* Current flyer preview */}
+            {flyerUrl && (
+              <div className="relative">
+                <img
+                  src={flyerUrl}
+                  alt="Flyer de campaña"
+                  className="w-full rounded-xl"
+                />
+                <button
+                  type="button"
+                  onClick={handleFlyerRemove}
+                  disabled={flyerUploading}
+                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition hover:bg-red-700 disabled:opacity-50"
+                  title="Eliminar flyer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {/* Upload area */}
+            <label className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-6 transition ${flyerUploading ? "border-gold-300 bg-gold-50" : "border-navy-200 bg-navy-50 hover:border-gold-400 hover:bg-gold-50"}`}>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleFlyerUpload}
+                className="hidden"
+                disabled={flyerUploading}
+              />
+              {flyerUploading ? (
+                <div className="flex items-center gap-2">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-gold-500 border-t-transparent" />
+                  <span className="text-sm font-medium text-gold-700">Subiendo...</span>
+                </div>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="mb-2 h-8 w-8 text-navy-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm font-medium text-navy-500">
+                    {flyerUrl ? "Cambiar flyer" : "Subir flyer"}
+                  </span>
+                  <span className="mt-1 text-xs text-navy-400">
+                    JPEG, PNG o WebP • Máx 5MB
+                  </span>
+                </>
+              )}
+            </label>
+
+            {flyerError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+                {flyerError}
+              </p>
+            )}
+          </div>
 
           {/* ─── SORTEO SECTION ─── */}
 
@@ -884,6 +1012,70 @@ export default function EditCampaignPage() {
               rows={3}
             />
           </div>
+        </div>
+
+        {/* Flyer */}
+        <div className="card space-y-4">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-navy-400">
+            Flyer
+          </h3>
+
+          {/* Current flyer preview */}
+          {flyerUrl && (
+            <div className="relative">
+              <img
+                src={flyerUrl}
+                alt="Flyer de campaña"
+                className="w-full rounded-xl"
+              />
+              <button
+                type="button"
+                onClick={handleFlyerRemove}
+                disabled={flyerUploading}
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-white shadow-lg transition hover:bg-red-700 disabled:opacity-50"
+                title="Eliminar flyer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Upload area */}
+          <label className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-6 transition ${flyerUploading ? "border-gold-300 bg-gold-50" : "border-navy-200 bg-navy-50 hover:border-gold-400 hover:bg-gold-50"}`}>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleFlyerUpload}
+              className="hidden"
+              disabled={flyerUploading}
+            />
+            {flyerUploading ? (
+              <div className="flex items-center gap-2">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-gold-500 border-t-transparent" />
+                <span className="text-sm font-medium text-gold-700">Subiendo...</span>
+              </div>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="mb-2 h-8 w-8 text-navy-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-sm font-medium text-navy-500">
+                  {flyerUrl ? "Cambiar flyer" : "Subir flyer"}
+                </span>
+                <span className="mt-1 text-xs text-navy-400">
+                  JPEG, PNG o WebP • Máx 5MB
+                </span>
+              </>
+            )}
+          </label>
+
+          {flyerError && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              {flyerError}
+            </p>
+          )}
         </div>
 
         {/* Dates */}

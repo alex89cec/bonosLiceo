@@ -38,6 +38,7 @@ export interface Campaign {
   installments_enabled: boolean;
   installments_count: number;
   max_tickets_per_buyer: number;
+  flyer_url: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
