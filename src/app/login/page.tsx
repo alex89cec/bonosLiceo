@@ -116,7 +116,7 @@ function LoginForm() {
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-navy-600 focus:ring-navy-500"
+            className="h-3.5 w-3.5 rounded-sm border-gray-300 text-navy-600 focus:ring-0"
           />
           <span className="text-sm text-navy-600">
             Recuérdame por 7 días
