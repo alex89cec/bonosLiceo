@@ -24,22 +24,24 @@ export default async function SellerDashboardPage() {
   const profile = profileData;
   const groupName = (profileData.seller_group as { name: string } | null)?.name;
 
-  // Get ticket stats for this seller (tickets they've sold/reserved)
+  // Get ticket stats for this seller — only from active campaigns
   const { data: stats } = await supabase
     .from("tickets")
-    .select("status")
-    .eq("seller_id", user.id);
+    .select("status, campaigns:campaign_id !inner (status)")
+    .eq("seller_id", user.id)
+    .eq("campaigns.status", "active");
 
   const counts = {
     reserved: stats?.filter((t) => t.status === "reserved").length || 0,
     sold: stats?.filter((t) => t.status === "sold").length || 0,
   };
 
-  // Get total sales amount from confirmed/completed payments
+  // Get total sales amount from confirmed/completed payments — only active campaigns
   const { data: sellerPayments } = await supabase
     .from("reservations")
-    .select("payments (amount, status)")
-    .eq("seller_id", user.id);
+    .select("payments (amount, status), campaigns:campaign_id !inner (status)")
+    .eq("seller_id", user.id)
+    .eq("campaigns.status", "active");
 
   let totalSales = 0;
   for (const r of sellerPayments || []) {

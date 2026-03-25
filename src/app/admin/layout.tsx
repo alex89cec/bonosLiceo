@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import LogoutButton from "@/components/LogoutButton";
+import AdminNav from "@/components/AdminNav";
 
 export default async function AdminLayout({
   children,
@@ -27,27 +27,8 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="overflow-x-auto border-b border-navy-100 bg-white px-4 py-3">
-        <div className="mx-auto flex max-w-5xl flex-nowrap items-center gap-3">
-          <a href="/seller/dashboard" className="shrink-0 text-sm font-medium text-navy-600 hover:text-navy-800">
-            Inicio
-          </a>
-          <a href="/admin" className="shrink-0 text-sm font-medium text-navy-600 hover:text-navy-800">
-            Campañas
-          </a>
-          <a href="/admin/groups" className="shrink-0 text-sm font-medium text-navy-400 hover:text-navy-600">
-            Grupos
-          </a>
-          <a href="/admin/sellers" className="shrink-0 text-sm font-medium text-navy-400 hover:text-navy-600">
-            Vendedores
-          </a>
-          <a href="/admin/reports" className="shrink-0 text-sm font-medium text-navy-400 hover:text-navy-600">
-            Reportes
-          </a>
-          <LogoutButton />
-        </div>
-      </nav>
-      <main className="mx-auto max-w-5xl p-4">{children}</main>
+      <AdminNav />
+      <main className="mx-auto max-w-5xl p-4 pb-20 md:pb-4">{children}</main>
     </div>
   );
 }
