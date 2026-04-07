@@ -29,6 +29,7 @@ export default function SellerNav({ isAdmin }: { isAdmin: boolean }) {
           {/* Left: Home */}
           <a
             href="/seller/dashboard"
+            title="Inicio"
             className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               isDashboard || isSelling
                 ? "text-navy-700"
@@ -49,6 +50,7 @@ export default function SellerNav({ isAdmin }: { isAdmin: boolean }) {
             {isAdmin && (
               <a
                 href="/admin"
+                title="Admin"
                 className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-navy-400 transition-colors hover:bg-navy-50 hover:text-navy-700"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -61,6 +63,7 @@ export default function SellerNav({ isAdmin }: { isAdmin: boolean }) {
             <button
               onClick={handleLogout}
               disabled={loggingOut}
+              title="Salir"
               className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-navy-400 transition-colors hover:bg-red-50 hover:text-red-500"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
