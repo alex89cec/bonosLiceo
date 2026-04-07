@@ -55,7 +55,6 @@ const navItems = [
 
 function isActive(pathname: string, item: (typeof navItems)[0]) {
   if (item.match) {
-    // Exact match for items with explicit match paths
     return item.match.some((m) => pathname === m);
   }
   if (item.href === "/seller/dashboard") {
@@ -79,75 +78,43 @@ export default function AdminNav() {
   }
 
   return (
-    <>
-      {/* Desktop top nav */}
-      <nav className="hidden border-b border-navy-100 bg-white px-4 py-3 md:block">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <div className="flex items-center gap-1">
-            {navItems.map((item) => {
-              const active = isActive(pathname, item);
-              return (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-navy-700 text-white"
-                      : "text-navy-500 hover:bg-navy-50 hover:text-navy-700"
-                  }`}
-                >
-                  {item.label}
-                </a>
-              );
-            })}
-          </div>
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-navy-400 transition-colors hover:bg-red-50 hover:text-red-500"
-          >
-            {loggingOut ? "..." : "Salir"}
-          </button>
-        </div>
-      </nav>
-
-      {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-navy-100 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
-        <div className="flex items-stretch justify-around">
+    <nav className="border-b border-navy-100 bg-white px-2 py-2.5">
+      <div className="mx-auto flex max-w-5xl items-center justify-between">
+        {/* Nav items */}
+        <div className="flex items-center gap-0.5">
           {navItems.map((item) => {
             const active = isActive(pathname, item);
             return (
               <a
                 key={item.href}
                 href={item.href}
-                className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium transition-colors ${
+                title={item.label}
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors ${
                   active
-                    ? "text-navy-700"
-                    : "text-navy-400"
+                    ? "bg-navy-700 text-white"
+                    : "text-navy-400 hover:bg-navy-50 hover:text-navy-700"
                 }`}
               >
-                <span className={`${active ? "text-gold-500" : ""}`}>
-                  {item.icon}
-                </span>
-                <span className="truncate">{item.label}</span>
-                {active && (
-                  <span className="absolute top-0 h-0.5 w-8 rounded-b bg-gold-500" />
-                )}
+                {item.icon}
+                <span className="hidden sm:inline">{item.label}</span>
               </a>
             );
           })}
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 text-[10px] font-medium text-navy-400 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span>{loggingOut ? "..." : "Salir"}</span>
-          </button>
         </div>
-      </nav>
-    </>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          title="Salir"
+          className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-navy-400 transition-colors hover:bg-red-50 hover:text-red-500"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          <span className="hidden sm:inline">{loggingOut ? "..." : "Salir"}</span>
+        </button>
+      </div>
+    </nav>
   );
 }
