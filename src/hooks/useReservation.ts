@@ -26,6 +26,20 @@ interface BatchError {
   error: string;
 }
 
+/** Fire-and-forget: send buyer confirmation email */
+async function sendBuyerEmail(reservationIds: string[]) {
+  try {
+    await fetch("/api/emails/buyer-confirmation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reservation_ids: reservationIds }),
+    });
+  } catch {
+    // Non-blocking — sale already completed
+    console.warn("Failed to send buyer confirmation email");
+  }
+}
+
 export function useReservation() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +77,12 @@ export function useReservation() {
 
       setReservation(data);
       setLoading(false);
-      return data as ReserveTicketResponse;
+
+      // Fire-and-forget: send buyer confirmation email
+      const result = data as ReserveTicketResponse;
+      sendBuyerEmail([result.reservation_id]);
+
+      return result;
     } catch {
       setError("Network error. Please try again.");
       setLoading(false);
@@ -106,6 +125,12 @@ export function useReservation() {
       setBatchResults(results);
       setBatchErrors(errors);
       setLoading(false);
+
+      // Fire-and-forget: send buyer confirmation email for all successful reservations
+      if (results.length > 0) {
+        sendBuyerEmail(results.map((r) => r.reservation_id));
+      }
+
       return { results, errors };
     } catch {
       setError("Network error. Please try again.");

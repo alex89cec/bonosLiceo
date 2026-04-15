@@ -43,6 +43,8 @@ export default function ReservationCard({
   const [error, setError] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
 
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
   const r = reservation;
   const p = r.payment;
   const isPending = p.status === "pending";
@@ -325,6 +327,58 @@ export default function ReservationCard({
                   Pago completado
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Resend email */}
+          {r.status !== "cancelled" && (
+            <div className="border-t border-navy-100 px-4 py-3">
+              <button
+                onClick={async () => {
+                  setEmailStatus("sending");
+                  try {
+                    const res = await fetch("/api/emails/buyer-confirmation", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ reservation_ids: [r.id] }),
+                    });
+                    setEmailStatus(res.ok ? "sent" : "error");
+                  } catch {
+                    setEmailStatus("error");
+                  }
+                }}
+                disabled={emailStatus === "sending"}
+                className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  emailStatus === "sent"
+                    ? "bg-green-50 text-green-700"
+                    : emailStatus === "error"
+                      ? "bg-red-50 text-red-600"
+                      : "border border-navy-200 text-navy-600 hover:bg-navy-50"
+                }`}
+              >
+                {emailStatus === "sending" ? (
+                  <>
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-navy-400 border-t-transparent" />
+                    Enviando...
+                  </>
+                ) : emailStatus === "sent" ? (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Email enviado
+                  </>
+                ) : emailStatus === "error" ? (
+                  "Error — Tocar para reintentar"
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    Reenviar email
+                  </>
+                )}
+              </button>
             </div>
           )}
 

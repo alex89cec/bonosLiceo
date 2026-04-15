@@ -11,6 +11,7 @@ import { useReservation } from "@/hooks/useReservation";
 import type { PaymentMode } from "@/types/database";
 
 type Step = "select" | "buyer" | "confirm" | "success";
+type EmailStatus = "idle" | "sending" | "sent" | "error";
 
 interface CampaignInfo {
   id: string;
@@ -43,6 +44,7 @@ export default function SellerSellPage() {
     useState<PaymentMode>("full_payment");
   const [origin, setOrigin] = useState("");
   const [showFlyer, setShowFlyer] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<EmailStatus>("idle");
 
   const {
     tickets,
@@ -826,6 +828,66 @@ export default function SellerSellPage() {
         </div>
       )}
 
+      {/* Resend email button */}
+      {successResults.length > 0 && (
+        <div className="mb-4">
+          <button
+            className={`w-full rounded-xl px-4 py-3 text-sm font-semibold transition-all ${
+              emailStatus === "sent"
+                ? "bg-green-50 text-green-700"
+                : emailStatus === "error"
+                  ? "bg-red-50 text-red-600"
+                  : emailStatus === "sending"
+                    ? "bg-navy-50 text-navy-400"
+                    : "border border-navy-200 text-navy-600 hover:bg-navy-50"
+            }`}
+            disabled={emailStatus === "sending"}
+            onClick={async () => {
+              setEmailStatus("sending");
+              try {
+                const res = await fetch("/api/emails/buyer-confirmation", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    reservation_ids: successResults.map((r) => r.reservation_id),
+                  }),
+                });
+                if (res.ok) {
+                  setEmailStatus("sent");
+                } else {
+                  setEmailStatus("error");
+                }
+              } catch {
+                setEmailStatus("error");
+              }
+            }}
+          >
+            {emailStatus === "sending" ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy-400 border-t-transparent" />
+                Enviando...
+              </span>
+            ) : emailStatus === "sent" ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Email reenviado a {successResults[0].buyer_email}
+              </span>
+            ) : emailStatus === "error" ? (
+              "Error al enviar — Tocar para reintentar"
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Reenviar email al comprador
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <button
           className="btn-secondary flex-1"
@@ -836,6 +898,7 @@ export default function SellerSellPage() {
             setBuyerName("");
             setBuyerPhone("");
             setPaymentMode("full_payment");
+            setEmailStatus("idle");
             refetch();
           }}
         >
