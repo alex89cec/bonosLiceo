@@ -35,9 +35,10 @@ export async function GET(request: NextRequest) {
     const statusFilter = request.nextUrl.searchParams.get("status") || "all";
 
     // ── Shared base data ──
+    // Use reservations (actual sales) instead of tickets (pre-generated grid)
+    // Reservations table is small; tickets table has 100k+ rows per campaign
     const [
       { data: campaigns },
-      { data: tickets },
       { data: reservations },
       { data: payments },
       { data: installments },
@@ -47,7 +48,6 @@ export async function GET(request: NextRequest) {
       { data: groups },
     ] = await Promise.all([
       supabase.from("campaigns").select("id, name, status, ticket_price, number_from, number_to"),
-      supabase.from("tickets").select("id, campaign_id, status, seller_id"),
       supabase.from("reservations").select("id, campaign_id, seller_id, status"),
       supabase.from("payments").select("id, campaign_id, reservation_id, amount, status"),
       supabase.from("installments").select("id, payment_id, amount, status, due_date"),
@@ -58,7 +58,6 @@ export async function GET(request: NextRequest) {
     ]);
 
     const allCampaigns = campaigns || [];
-    const allTickets = tickets || [];
     const allReservations = reservations || [];
     const allPayments = payments || [];
     const allInstallments = installments || [];
@@ -80,13 +79,31 @@ export async function GET(request: NextRequest) {
       reservationSellerMap.set(r.id, r.seller_id);
     }
 
-    // Build payment→campaign map & payment→seller
-    const paymentCampaignMap = new Map<string, string>();
+    // Build payment→seller map
     const paymentSellerMap = new Map<string, string>();
     for (const p of allPayments) {
-      paymentCampaignMap.set(p.id, p.campaign_id);
       const sellerId = reservationSellerMap.get(p.reservation_id);
       if (sellerId) paymentSellerMap.set(p.id, sellerId);
+    }
+
+    // Helper: count reservations as "sold" (reservations represent actual sales/reservations)
+    // A reservation with status "active" or "confirmed" = taken number
+    function countTaken(campaignId: string, sellerId?: string) {
+      return allReservations.filter(
+        (r) =>
+          r.campaign_id === campaignId &&
+          (r.status === "active" || r.status === "confirmed") &&
+          (sellerId ? r.seller_id === sellerId : true)
+      ).length;
+    }
+
+    function countByStatus(campaignId: string, status: string, sellerId?: string) {
+      return allReservations.filter(
+        (r) =>
+          r.campaign_id === campaignId &&
+          r.status === status &&
+          (sellerId ? r.seller_id === sellerId : true)
+      ).length;
     }
 
     // ── TAB: summary ──
@@ -96,23 +113,21 @@ export async function GET(request: NextRequest) {
       let totalPending = 0;
       let totalNumbers = 0;
       let totalSold = 0;
-      let totalReserved = 0;
 
       const summaryCampaigns: SummaryCampaign[] = [];
 
       for (const c of filteredCampaigns) {
         const total = c.number_to - c.number_from + 1;
-        const cTickets = allTickets.filter((t) => t.campaign_id === c.id);
-        const sold = cTickets.filter((t) => t.status === "sold").length;
-        const reserved = cTickets.filter((t) => t.status === "reserved").length;
-        const expected = (sold + reserved) * c.ticket_price;
+        const taken = countTaken(c.id);
+        const confirmed = countByStatus(c.id, "confirmed");
+        const active = countByStatus(c.id, "active");
+        const expected = taken * c.ticket_price;
 
         const cPayments = allPayments.filter((p) => p.campaign_id === c.id);
-        const confirmed = cPayments
+        const confirmedAmount = cPayments
           .filter((p) => p.status === "completed")
           .reduce((s, p) => s + p.amount, 0);
 
-        // For partial payments, count paid installments
         const partialPaymentIds = new Set(
           cPayments.filter((p) => p.status === "partial").map((p) => p.id)
         );
@@ -120,24 +135,23 @@ export async function GET(request: NextRequest) {
           .filter((i) => partialPaymentIds.has(i.payment_id) && i.status === "paid")
           .reduce((s, i) => s + i.amount, 0);
 
-        const totalConfirmedForCampaign = confirmed + paidInstallments;
+        const totalConfirmedForCampaign = confirmedAmount + paidInstallments;
         const pending = expected - totalConfirmedForCampaign;
 
         totalExpected += expected;
         totalConfirmed += totalConfirmedForCampaign;
         totalPending += pending;
         totalNumbers += total;
-        totalSold += sold;
-        totalReserved += reserved;
+        totalSold += taken;
 
         summaryCampaigns.push({
           id: c.id,
           name: c.name,
           status: c.status,
           total,
-          sold,
-          reserved,
-          percent: total > 0 ? ((sold + reserved) / total) * 100 : 0,
+          sold: confirmed,
+          reserved: active,
+          percent: total > 0 ? (taken / total) * 100 : 0,
         });
       }
 
@@ -158,7 +172,7 @@ export async function GET(request: NextRequest) {
         total_pending: totalPending,
         total_numbers: totalNumbers,
         total_sold: totalSold,
-        total_reserved: totalReserved,
+        total_reserved: 0,
         overdue_count: overdue.length,
         overdue_amount: overdue.reduce((s, i) => s + i.amount, 0),
         campaigns: summaryCampaigns,
@@ -173,14 +187,14 @@ export async function GET(request: NextRequest) {
 
       for (const c of filteredCampaigns) {
         const total = c.number_to - c.number_from + 1;
-        const cTickets = allTickets.filter((t) => t.campaign_id === c.id);
-        const available = cTickets.filter((t) => t.status === "available").length;
-        const reserved = cTickets.filter((t) => t.status === "reserved").length;
-        const sold = cTickets.filter((t) => t.status === "sold").length;
-        const expected = (sold + reserved) * c.ticket_price;
+        const taken = countTaken(c.id);
+        const confirmed = countByStatus(c.id, "confirmed");
+        const active = countByStatus(c.id, "active");
+        const available = total - taken;
+        const expected = taken * c.ticket_price;
 
         const cPayments = allPayments.filter((p) => p.campaign_id === c.id);
-        const confirmed = cPayments
+        const confirmedAmount = cPayments
           .filter((p) => p.status === "completed")
           .reduce((s, p) => s + p.amount, 0);
 
@@ -199,14 +213,15 @@ export async function GET(request: NextRequest) {
             (i.status === "overdue" || (i.status === "pending" && i.due_date < now))
         );
 
-        // Per-seller breakdown
+        // Per-seller breakdown using reservations
         const sellerMap = new Map<string, CampaignSellerBreakdown>();
-        for (const t of cTickets) {
-          if (!t.seller_id || t.status === "available") continue;
-          if (!sellerMap.has(t.seller_id)) {
-            const p = allProfiles.find((pr) => pr.id === t.seller_id);
-            sellerMap.set(t.seller_id, {
-              id: t.seller_id,
+        for (const r of allReservations) {
+          if (r.campaign_id !== c.id) continue;
+          if (r.status !== "active" && r.status !== "confirmed") continue;
+          if (!sellerMap.has(r.seller_id)) {
+            const p = allProfiles.find((pr) => pr.id === r.seller_id);
+            sellerMap.set(r.seller_id, {
+              id: r.seller_id,
               name: p?.full_name || "—",
               code: p?.seller_code || null,
               reserved: 0,
@@ -215,9 +230,9 @@ export async function GET(request: NextRequest) {
               pending_amount: 0,
             });
           }
-          const entry = sellerMap.get(t.seller_id)!;
-          if (t.status === "reserved") entry.reserved++;
-          if (t.status === "sold") entry.sold++;
+          const entry = sellerMap.get(r.seller_id)!;
+          if (r.status === "active") entry.reserved++;
+          if (r.status === "confirmed") entry.sold++;
         }
 
         // Add payment amounts per seller
@@ -228,7 +243,6 @@ export async function GET(request: NextRequest) {
           if (p.status === "completed") {
             entry.confirmed_amount += p.amount;
           } else {
-            // For partial, add paid installments
             const paidInst = allInstallments
               .filter((i) => i.payment_id === p.id && i.status === "paid")
               .reduce((s, i) => s + i.amount, 0);
@@ -244,16 +258,16 @@ export async function GET(request: NextRequest) {
           ticket_price: c.ticket_price,
           total_numbers: total,
           available,
-          reserved,
-          sold,
-          percent_sold: total > 0 ? ((sold + reserved) / total) * 100 : 0,
+          reserved: active,
+          sold: confirmed,
+          percent_sold: total > 0 ? (taken / total) * 100 : 0,
           expected_amount: expected,
-          confirmed_amount: confirmed + paidInstallments,
+          confirmed_amount: confirmedAmount + paidInstallments,
           partial_amount: paidInstallments,
-          pending_amount: expected - confirmed - paidInstallments,
+          pending_amount: expected - confirmedAmount - paidInstallments,
           overdue_installments: overdueList.length,
           overdue_amount: overdueList.reduce((s, i) => s + i.amount, 0),
-          sellers: Array.from(sellerMap.values()).sort((a, b) => b.sold - a.sold),
+          sellers: Array.from(sellerMap.values()).sort((a, b) => (b.sold + b.reserved) - (a.sold + a.reserved)),
         });
       }
 
@@ -271,19 +285,17 @@ export async function GET(request: NextRequest) {
           .map((cs) => cs.campaign_id)
           .filter((cid) => filteredCampaignIds.has(cid));
 
-        // Tickets by this seller in filtered campaigns
-        const sellerTickets = allTickets.filter(
-          (t) => t.seller_id === seller.id && filteredCampaignIds.has(t.campaign_id)
+        // Reservations by this seller in filtered campaigns
+        const sellerReservations = allReservations.filter(
+          (r) =>
+            r.seller_id === seller.id &&
+            filteredCampaignIds.has(r.campaign_id) &&
+            (r.status === "active" || r.status === "confirmed")
         );
-        const totalReserved = sellerTickets.filter((t) => t.status === "reserved").length;
-        const totalSold = sellerTickets.filter((t) => t.status === "sold").length;
+        const totalReserved = sellerReservations.filter((r) => r.status === "active").length;
+        const totalSold = sellerReservations.filter((r) => r.status === "confirmed").length;
 
-        // Payments for this seller's reservations
-        const sellerReservationIds = new Set(
-          allReservations
-            .filter((r) => r.seller_id === seller.id && filteredCampaignIds.has(r.campaign_id))
-            .map((r) => r.id)
-        );
+        // Payments for this seller
         const sellerPayments = allPayments.filter((p) => {
           const rSellerId = reservationSellerMap.get(p.reservation_id);
           return rSellerId === seller.id && filteredCampaignIds.has(p.campaign_id);
@@ -294,14 +306,18 @@ export async function GET(request: NextRequest) {
 
         // Per-campaign breakdown
         const campaignBreakdowns: SellerCampaignBreakdown[] = [];
+        const relevantCampaignIds = new Set([
+          ...assigned,
+          ...sellerReservations.map((r) => r.campaign_id),
+        ]);
 
-        for (const cid of new Set([...assigned, ...sellerTickets.map((t) => t.campaign_id)])) {
+        for (const cid of relevantCampaignIds) {
           const campaign = allCampaigns.find((c) => c.id === cid);
           if (!campaign) continue;
 
-          const cTickets = sellerTickets.filter((t) => t.campaign_id === cid);
-          const cReserved = cTickets.filter((t) => t.status === "reserved").length;
-          const cSold = cTickets.filter((t) => t.status === "sold").length;
+          const cReservations = sellerReservations.filter((r) => r.campaign_id === cid);
+          const cReserved = cReservations.filter((r) => r.status === "active").length;
+          const cSold = cReservations.filter((r) => r.status === "confirmed").length;
           const cExpected = (cReserved + cSold) * campaign.ticket_price;
 
           const cPayments = sellerPayments.filter((p) => p.campaign_id === cid);
@@ -309,7 +325,6 @@ export async function GET(request: NextRequest) {
             .filter((p) => p.status === "completed")
             .reduce((s, p) => s + p.amount, 0);
 
-          // Partial paid installments
           const partialIds = new Set(
             cPayments.filter((p) => p.status === "partial").map((p) => p.id)
           );
@@ -333,7 +348,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Only include sellers with assignments or sales
-        if (assigned.length === 0 && totalReserved === 0 && totalSold === 0) continue;
+        if (assigned.length === 0 && sellerReservations.length === 0) continue;
 
         const group = allGroups.find((g) => g.id === seller.group_id);
 
@@ -351,11 +366,11 @@ export async function GET(request: NextRequest) {
           expected_amount: expectedTotal,
           confirmed_amount: confirmedTotal,
           pending_amount: expectedTotal - confirmedTotal,
-          campaigns: campaignBreakdowns.sort((a, b) => b.sold - a.sold),
+          campaigns: campaignBreakdowns.sort((a, b) => (b.sold + b.reserved) - (a.sold + a.reserved)),
         });
       }
 
-      result.sort((a, b) => b.total_sold - a.total_sold);
+      result.sort((a, b) => (b.total_sold + b.total_reserved) - (a.total_sold + a.total_reserved));
       return NextResponse.json(result);
     }
 
@@ -374,12 +389,14 @@ export async function GET(request: NextRequest) {
           .map((cg) => cg.campaign_id)
           .filter((cid) => filteredCampaignIds.has(cid));
 
-        // All tickets by group members in filtered campaigns
-        const groupTickets = allTickets.filter(
-          (t) => t.seller_id && memberIds.has(t.seller_id) && filteredCampaignIds.has(t.campaign_id)
+        // All reservations by group members in filtered campaigns
+        const groupReservations = allReservations.filter(
+          (r) =>
+            memberIds.has(r.seller_id) &&
+            filteredCampaignIds.has(r.campaign_id) &&
+            (r.status === "active" || r.status === "confirmed")
         );
-        const totalSold = groupTickets.filter((t) => t.status === "sold").length;
-        const totalReserved = groupTickets.filter((t) => t.status === "reserved").length;
+        const totalTaken = groupReservations.length;
 
         // Payments by group members
         const groupPayments = allPayments.filter((p) => {
@@ -391,10 +408,8 @@ export async function GET(request: NextRequest) {
         let expectedTotal = 0;
 
         for (const c of filteredCampaigns) {
-          const cTickets = groupTickets.filter((t) => t.campaign_id === c.id);
-          const cSold = cTickets.filter((t) => t.status === "sold").length;
-          const cRes = cTickets.filter((t) => t.status === "reserved").length;
-          expectedTotal += (cSold + cRes) * c.ticket_price;
+          const cRes = groupReservations.filter((r) => r.campaign_id === c.id).length;
+          expectedTotal += cRes * c.ticket_price;
         }
 
         for (const p of groupPayments) {
@@ -411,9 +426,8 @@ export async function GET(request: NextRequest) {
         // Member leaderboard
         const memberBreakdowns: GroupMemberBreakdown[] = [];
         for (const m of members) {
-          const mTickets = groupTickets.filter((t) => t.seller_id === m.id);
-          const mSold = mTickets.filter((t) => t.status === "sold").length;
-          const mReserved = mTickets.filter((t) => t.status === "reserved").length;
+          const mReservations = groupReservations.filter((r) => r.seller_id === m.id);
+          const mTaken = mReservations.length;
 
           const mPayments = groupPayments.filter((p) => paymentSellerMap.get(p.id) === m.id);
           let mConfirmed = mPayments
@@ -428,15 +442,15 @@ export async function GET(request: NextRequest) {
 
           let mExpected = 0;
           for (const c of filteredCampaigns) {
-            const ct = mTickets.filter((t) => t.campaign_id === c.id);
-            mExpected += (ct.filter((t) => t.status === "sold").length + ct.filter((t) => t.status === "reserved").length) * c.ticket_price;
+            const ct = mReservations.filter((r) => r.campaign_id === c.id).length;
+            mExpected += ct * c.ticket_price;
           }
 
           memberBreakdowns.push({
             id: m.id,
             name: m.full_name,
             code: m.seller_code,
-            sold: mSold + mReserved,
+            sold: mTaken,
             confirmed_amount: mConfirmed,
             pending_amount: mExpected - mConfirmed,
           });
@@ -451,7 +465,7 @@ export async function GET(request: NextRequest) {
           admin_name: admin?.full_name || "—",
           member_count: members.length,
           campaigns_assigned: groupCampaignIds.length,
-          total_sold: totalSold + totalReserved,
+          total_sold: totalTaken,
           total_expected: expectedTotal,
           confirmed_amount: confirmedTotal,
           pending_amount: expectedTotal - confirmedTotal,
