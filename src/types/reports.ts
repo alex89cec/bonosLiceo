@@ -89,6 +89,16 @@ export interface SummaryReport {
   campaigns: SummaryCampaign[];
 }
 
+export interface SummaryCampaignReservation {
+  ticket_number: string;
+  seller_name: string;
+  seller_code: string | null;
+  buyer_email: string;
+  buyer_name: string | null;
+  status: string; // "active" = reserved, "confirmed" = sold
+  payment_status: string;
+}
+
 export interface SummaryCampaign {
   id: string;
   name: string;
@@ -97,4 +107,5 @@ export interface SummaryCampaign {
   sold: number;
   reserved: number;
   percent: number;
+  reservations: SummaryCampaignReservation[];
 }

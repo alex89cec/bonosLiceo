@@ -12,5 +12,6 @@ export function formatNumber(value: number): string {
 }
 
 export function formatPercent(value: number): string {
+  if (value > 0 && value < 0.1) return "<0.1%";
   return `${Math.round(value * 10) / 10}%`;
 }
