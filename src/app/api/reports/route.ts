@@ -89,10 +89,11 @@ export async function GET(request: NextRequest) {
     const buyerMap = new Map(allBuyers.map((b) => [b.id, b]));
     const allGroups = groups || [];
 
-    // Filter campaigns by status if requested
+    // Filter campaigns by status
+    // "all" shows active + sorted (NOT closed); closed only visible via "closed" filter
     const filteredCampaigns =
       statusFilter === "all"
-        ? allCampaigns
+        ? allCampaigns.filter((c) => c.status !== "closed")
         : allCampaigns.filter((c) => c.status === statusFilter);
     const filteredCampaignIds = new Set(filteredCampaigns.map((c) => c.id));
 
