@@ -9,6 +9,7 @@ import type {
   GroupMemberBreakdown,
   SummaryReport,
   SummaryCampaign,
+  SummaryCampaignReservation,
 } from "@/types/reports";
 
 export async function GET(request: NextRequest) {
@@ -46,15 +47,17 @@ export async function GET(request: NextRequest) {
       { data: campaignSellers },
       { data: campaignGroups },
       { data: groups },
+      { data: buyers },
     ] = await Promise.all([
       supabase.from("campaigns").select("id, name, status, ticket_price, number_from, number_to"),
-      supabase.from("reservations").select("id, campaign_id, seller_id, status"),
+      supabase.from("reservations").select("id, campaign_id, seller_id, buyer_id, ticket_id, status"),
       supabase.from("payments").select("id, campaign_id, reservation_id, amount, status"),
       supabase.from("installments").select("id, payment_id, amount, status, due_date"),
       supabase.from("profiles").select("id, full_name, email, role, seller_code, group_id, is_active").in("role", ["seller", "admin"]),
       supabase.from("campaign_sellers").select("campaign_id, seller_id"),
       supabase.from("campaign_groups").select("campaign_id, group_id"),
       supabase.from("seller_groups").select("id, name, color, admin_id"),
+      supabase.from("buyers").select("id, email, full_name"),
     ]);
 
     const allCampaigns = campaigns || [];
@@ -64,12 +67,33 @@ export async function GET(request: NextRequest) {
     const allProfiles = profiles || [];
     const allCampaignSellers = campaignSellers || [];
     const allCampaignGroups = campaignGroups || [];
+    const allBuyers = buyers || [];
+
+    // Fetch ticket numbers for reservations (only the reserved/sold ones, not all 100k)
+    const reservationTicketIds = allReservations
+      .filter((r) => r.status === "active" || r.status === "confirmed")
+      .map((r) => r.ticket_id)
+      .filter(Boolean);
+    let ticketNumberMap = new Map<string, string>();
+    if (reservationTicketIds.length > 0) {
+      const { data: ticketRows } = await supabase
+        .from("tickets")
+        .select("id, number")
+        .in("id", reservationTicketIds);
+      for (const t of ticketRows || []) {
+        ticketNumberMap.set(t.id, t.number);
+      }
+    }
+
+    // Buyer lookup
+    const buyerMap = new Map(allBuyers.map((b) => [b.id, b]));
     const allGroups = groups || [];
 
-    // Filter campaigns by status if requested
+    // Filter campaigns by status
+    // "all" shows active + sorted (NOT closed); closed only visible via "closed" filter
     const filteredCampaigns =
       statusFilter === "all"
-        ? allCampaigns
+        ? allCampaigns.filter((c) => c.status !== "closed")
         : allCampaigns.filter((c) => c.status === statusFilter);
     const filteredCampaignIds = new Set(filteredCampaigns.map((c) => c.id));
 
@@ -144,6 +168,29 @@ export async function GET(request: NextRequest) {
         totalNumbers += total;
         totalSold += taken;
 
+        // Build reservation details for this campaign
+        const campaignReservations: SummaryCampaignReservation[] = allReservations
+          .filter(
+            (r) =>
+              r.campaign_id === c.id &&
+              (r.status === "active" || r.status === "confirmed")
+          )
+          .map((r) => {
+            const seller = allProfiles.find((p) => p.id === r.seller_id);
+            const buyer = buyerMap.get(r.buyer_id);
+            const payment = allPayments.find((p) => p.reservation_id === r.id);
+            return {
+              ticket_number: ticketNumberMap.get(r.ticket_id) || "—",
+              seller_name: seller?.full_name || "—",
+              seller_code: seller?.seller_code || null,
+              buyer_email: buyer?.email || "—",
+              buyer_name: buyer?.full_name || null,
+              status: r.status,
+              payment_status: payment?.status || "pending",
+            };
+          })
+          .sort((a, b) => a.ticket_number.localeCompare(b.ticket_number));
+
         summaryCampaigns.push({
           id: c.id,
           name: c.name,
@@ -152,6 +199,7 @@ export async function GET(request: NextRequest) {
           sold: confirmed,
           reserved: active,
           percent: total > 0 ? (taken / total) * 100 : 0,
+          reservations: campaignReservations,
         });
       }
 
