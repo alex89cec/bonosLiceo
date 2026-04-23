@@ -73,8 +73,60 @@ export const groupSchema = z.object({
   color: z.string().min(1).max(20).optional().default("blue"),
 });
 
+// ============================================================
+// Events (tickets module)
+// ============================================================
+
+export const eventSchema = z.object({
+  name: z.string().min(1).max(200),
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9-]+$/, "Solo letras, números y guiones"),
+  description: z.string().optional().nullable(),
+  event_date: z.string().datetime(),
+  venue: z.string().optional().nullable(),
+  image_url: z.string().url().optional().nullable(),
+  status: z.enum(["draft", "active", "past", "cancelled"]).default("draft"),
+});
+
+export const eventTicketTypeSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    description: z.string().optional().nullable(),
+    price: z.number().min(0),
+    quantity: z.number().int().positive(),
+    color: z.string().min(1).max(20).default("gray"),
+    sales_start_at: z.string().datetime().optional().nullable(),
+    sales_end_at: z.string().datetime().optional().nullable(),
+    is_complimentary: z.boolean().default(false),
+    display_order: z.number().int().default(0),
+  })
+  .refine(
+    (data) => {
+      if (data.sales_start_at && data.sales_end_at) {
+        return new Date(data.sales_end_at) > new Date(data.sales_start_at);
+      }
+      return true;
+    },
+    {
+      message: "La fecha de fin de ventas debe ser posterior al inicio",
+      path: ["sales_end_at"],
+    },
+  );
+
+export const eventSellerAssignmentSchema = z.object({
+  seller_id: z.string().uuid(),
+  can_sell: z.boolean().default(true),
+  can_scan: z.boolean().default(false),
+});
+
 export type ReserveTicketInput = z.infer<typeof reserveTicketSchema>;
 export type ReserveBatchInput = z.infer<typeof reserveBatchSchema>;
 export type CampaignInput = z.infer<typeof campaignSchema>;
 export type SorteoInput = z.infer<typeof sorteoSchema>;
 export type GroupInput = z.infer<typeof groupSchema>;
+export type EventInput = z.infer<typeof eventSchema>;
+export type EventTicketTypeInput = z.infer<typeof eventTicketTypeSchema>;
+export type EventSellerAssignmentInput = z.infer<typeof eventSellerAssignmentSchema>;
