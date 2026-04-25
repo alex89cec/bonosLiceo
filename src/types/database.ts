@@ -20,6 +20,7 @@ export interface Profile {
   is_active: boolean;
   must_change_password: boolean;
   group_id: string | null;
+  is_approver: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -148,12 +149,6 @@ export type ScanResult =
   | "invalid"
   | "wrong_event"
   | "cancelled";
-export type PendingOrderStatus =
-  | "pending"
-  | "approved"
-  | "failed"
-  | "expired"
-  | "cancelled";
 
 export interface Event {
   id: string;
@@ -192,6 +187,8 @@ export interface EventTicket {
   buyer_id: string;
   seller_id: string | null;
   payment_id: string | null;
+  order_id: string | null;
+  amount_paid: number | null;
   qr_token: string;
   status: EventTicketStatus;
   entered_at: string | null;
@@ -220,20 +217,39 @@ export interface EventScanLog {
   metadata: Record<string, unknown> | null;
 }
 
-export interface PendingOrder {
+export type EventOrderStatus =
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "complimentary";
+
+export type EventPaymentMethod = "transferencia" | "cortesia";
+
+export interface EventOrderItem {
+  ticket_type_id: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface EventOrder {
   id: string;
   event_id: string;
-  buyer_email: string;
-  buyer_name: string | null;
-  buyer_phone: string | null;
-  items: { ticket_type_id: string; quantity: number; price: number }[];
-  total: number;
-  mp_preference_id: string | null;
-  mp_payment_id: string | null;
-  seller_code: string | null;
-  status: PendingOrderStatus;
-  expires_at: string;
-  approved_at: string | null;
+  buyer_id: string;
+  seller_id: string | null;
+  items: EventOrderItem[];
+  total_amount: number;
+  payment_method: EventPaymentMethod;
+  receipt_url: string | null;
+  receipt_filename: string | null;
+  receipt_mime_type: string | null;
+  receipt_uploaded_at: string | null;
+  status: EventOrderStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }
