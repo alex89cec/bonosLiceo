@@ -8,10 +8,12 @@ export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ seller?: string }>;
 }
 
-export default async function PublicEventPage({ params }: Props) {
+export default async function PublicEventPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const { seller: sellerCodeParam } = await searchParams;
   const supabase = createServiceRoleClient();
 
   const { data: event } = await supabase
@@ -26,6 +28,32 @@ export default async function PublicEventPage({ params }: Props) {
   }
 
   const ev = event as Event;
+
+  // Resolve initial seller (from ?seller=XXX) — only attribute if assigned with can_sell
+  let initialSeller: { code: string; name: string } | null = null;
+  if (sellerCodeParam) {
+    const { data: sellerProfile } = await supabase
+      .from("profiles")
+      .select("id, full_name, seller_code, is_active")
+      .eq("seller_code", sellerCodeParam)
+      .single();
+
+    if (sellerProfile?.is_active) {
+      const { data: assignment } = await supabase
+        .from("event_sellers")
+        .select("can_sell")
+        .eq("event_id", ev.id)
+        .eq("seller_id", sellerProfile.id)
+        .single();
+
+      if (assignment?.can_sell) {
+        initialSeller = {
+          code: sellerProfile.seller_code!,
+          name: sellerProfile.full_name,
+        };
+      }
+    }
+  }
 
   const { data: types } = await supabase
     .from("event_ticket_types")
@@ -112,6 +140,7 @@ export default async function PublicEventPage({ params }: Props) {
           event={ev}
           ticketTypes={ticketTypes}
           stockMap={stockMap}
+          initialSeller={initialSeller}
         />
       </main>
 

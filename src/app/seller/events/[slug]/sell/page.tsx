@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Event, EventTicketType } from "@/types/database";
 import { formatCurrency } from "@/lib/format";
+import ShareEventButton from "@/components/ShareEventButton";
 
 type Step = "select" | "buyer" | "receipt" | "success";
 
@@ -17,6 +18,7 @@ export default function SellerSellEventPage() {
   const [types, setTypes] = useState<EventTicketType[]>([]);
   /** stockMap[id] is the remaining quantity, or null for unlimited */
   const [stockMap, setStockMap] = useState<Record<string, number | null>>({});
+  const [sellerCode, setSellerCode] = useState<string | null>(null);
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
 
@@ -35,6 +37,20 @@ export default function SellerSellEventPage() {
   useEffect(() => {
     async function init() {
       const supabase = createClient();
+
+      // Fetch the seller's own code (for the share link)
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("seller_code")
+          .eq("id", user.id)
+          .single();
+        setSellerCode(profile?.seller_code || null);
+      }
+
       const { data: ev } = await supabase
         .from("events")
         .select("*")
@@ -189,17 +205,28 @@ export default function SellerSellEventPage() {
           Volver
         </Link>
 
-        <h2 className="text-xl font-bold text-navy-700">{event.name}</h2>
-        <p className="mb-4 text-sm text-navy-400">
-          {new Date(event.event_date).toLocaleDateString("es-AR", {
-            day: "2-digit",
-            month: "long",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-          {event.venue && <span> • {event.venue}</span>}
-        </p>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-navy-700">{event.name}</h2>
+            <p className="text-sm text-navy-400">
+              {new Date(event.event_date).toLocaleDateString("es-AR", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              {event.venue && <span> • {event.venue}</span>}
+            </p>
+          </div>
+          {sellerCode && (
+            <ShareEventButton
+              eventName={event.name}
+              eventSlug={event.slug}
+              sellerCode={sellerCode}
+            />
+          )}
+        </div>
 
         <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-navy-400">
           Elegí tipos de entrada

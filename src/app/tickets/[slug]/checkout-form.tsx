@@ -6,19 +6,31 @@ import { formatCurrency } from "@/lib/format";
 
 type Step = "select" | "buyer" | "transfer" | "success";
 
+interface InitialSeller {
+  code: string;
+  name: string;
+}
+
 interface Props {
   event: Event;
   ticketTypes: EventTicketType[];
   stockMap: Record<string, number | null>;
+  initialSeller: InitialSeller | null;
 }
 
-export default function PublicCheckout({ event, ticketTypes, stockMap }: Props) {
+export default function PublicCheckout({
+  event,
+  ticketTypes,
+  stockMap,
+  initialSeller,
+}: Props) {
   const [step, setStep] = useState<Step>("select");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [buyerEmail, setBuyerEmail] = useState("");
   const [buyerName, setBuyerName] = useState("");
   const [buyerPhone, setBuyerPhone] = useState("");
   const [receipt, setReceipt] = useState<File | null>(null);
+  const [sellerCode, setSellerCode] = useState(initialSeller?.code || "");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -64,6 +76,7 @@ export default function PublicCheckout({ event, ticketTypes, stockMap }: Props) 
         items,
         payment_method: "transferencia",
         is_preventa: false,
+        seller_code: sellerCode.trim() || null,
       };
 
       const formData = new FormData();
@@ -208,6 +221,16 @@ export default function PublicCheckout({ event, ticketTypes, stockMap }: Props) 
           Vamos a usar este email para enviarte las entradas.
         </p>
 
+        {/* Seller attribution */}
+        {initialSeller ? (
+          <div className="mb-4 rounded-2xl border border-blue-200 bg-blue-50 p-3">
+            <p className="text-xs text-blue-700">
+              👤 Tu compra queda asociada al vendedor:
+            </p>
+            <p className="text-sm font-semibold text-blue-900">{initialSeller.name}</p>
+          </div>
+        ) : null}
+
         <div className="rounded-2xl border border-navy-100 bg-white p-4 shadow-sm">
           <div className="space-y-4">
             <div>
@@ -264,6 +287,31 @@ export default function PublicCheckout({ event, ticketTypes, stockMap }: Props) 
                 inputMode="tel"
               />
             </div>
+
+            {/* Manual seller code (only if not pre-attributed) */}
+            {!initialSeller && (
+              <div>
+                <label
+                  htmlFor="sellerCode"
+                  className="mb-1.5 block text-sm font-semibold text-navy-700"
+                >
+                  Código de vendedor{" "}
+                  <span className="font-normal text-navy-300">(opcional)</span>
+                </label>
+                <input
+                  id="sellerCode"
+                  type="text"
+                  className="input-field font-mono uppercase"
+                  placeholder="Ej: ABC1234"
+                  value={sellerCode}
+                  onChange={(e) => setSellerCode(e.target.value.trim().toUpperCase())}
+                  maxLength={40}
+                />
+                <p className="mt-1 text-xs text-navy-400">
+                  Si te derivó alguien con un código, ingresalo acá para que la compra le quede asignada.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

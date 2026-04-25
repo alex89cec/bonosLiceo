@@ -24,6 +24,14 @@ const orderInputSchema = z.object({
   /** If true, the order is created without a receipt; status=awaiting_receipt */
   is_preventa: z.boolean().optional().default(false),
   notes: z.string().optional().nullable(),
+  /** Seller code for public orders (attribution). Ignored for authenticated sellers. */
+  seller_code: z
+    .string()
+    .trim()
+    .max(40)
+    .optional()
+    .nullable()
+    .transform((v) => (v && v.length > 0 ? v : null)),
 });
 
 /**
@@ -316,13 +324,42 @@ export async function POST(
       initialStatus = "pending_review";
     }
 
+    // Resolve seller_id:
+    // - If user is a seller, attribute to themselves (ignore seller_code in body)
+    // - If public order with seller_code, look up and validate
+    let resolvedSellerId: string | null = null;
+    if (role === "seller") {
+      resolvedSellerId = user!.id;
+    } else if (role === "public" && input.seller_code) {
+      const { data: sellerProfile } = await service
+        .from("profiles")
+        .select("id, is_active")
+        .eq("seller_code", input.seller_code)
+        .single();
+
+      if (sellerProfile && sellerProfile.is_active) {
+        const { data: assignment } = await service
+          .from("event_sellers")
+          .select("can_sell")
+          .eq("event_id", eventId)
+          .eq("seller_id", sellerProfile.id)
+          .single();
+
+        if (assignment?.can_sell) {
+          resolvedSellerId = sellerProfile.id;
+        }
+        // If invalid (not assigned or can't sell), silently drop the attribution
+        // — order still goes through, just without seller credit
+      }
+    }
+
     // Insert order
     const { data: order, error: orderErr } = await service
       .from("event_orders")
       .insert({
         event_id: eventId,
         buyer_id: buyer.id,
-        seller_id: role === "seller" ? user!.id : null,
+        seller_id: resolvedSellerId,
         items: itemsSnapshot,
         total_amount: totalAmount,
         payment_method: input.payment_method,

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import ShareEventButton from "@/components/ShareEventButton";
 
 export default async function SellerEventsPage() {
   const supabase = await createServerSupabaseClient();
@@ -7,6 +8,14 @@ export default async function SellerEventsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("seller_code")
+    .eq("id", user.id)
+    .single();
+
+  const sellerCode = profile?.seller_code || null;
 
   // Get events where user is assigned with can_sell=true
   const { data: assignments } = await supabase
@@ -79,12 +88,14 @@ export default async function SellerEventsPage() {
             });
 
             return (
-              <Link
+              <div
                 key={e.id}
-                href={`/seller/events/${e.slug}/sell`}
                 className="card block transition hover:border-gold-400 hover:bg-gold-50"
               >
-                <div className="flex items-start justify-between gap-3">
+                <Link
+                  href={`/seller/events/${e.slug}/sell`}
+                  className="flex items-start justify-between gap-3"
+                >
                   <div className="min-w-0 flex-1">
                     <h3 className="font-semibold text-navy-700">{e.name}</h3>
                     <p className="mt-1 text-xs text-navy-400">
@@ -112,8 +123,20 @@ export default async function SellerEventsPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                     </svg>
                   </span>
-                </div>
-              </Link>
+                </Link>
+                {sellerCode && (
+                  <div className="mt-3 flex items-center justify-between border-t border-navy-100 pt-3">
+                    <p className="text-xs text-navy-400">
+                      Tu link personal con código <span className="font-mono font-bold">{sellerCode}</span>
+                    </p>
+                    <ShareEventButton
+                      eventName={e.name}
+                      eventSlug={e.slug}
+                      sellerCode={sellerCode}
+                    />
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
