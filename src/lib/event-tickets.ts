@@ -2,16 +2,48 @@ import crypto from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { generateQrToken } from "@/lib/qr-token";
 
+interface BundleComponent {
+  ticket_type_id: string;
+  quantity: number;
+}
+
 interface OrderItemSnapshot {
   ticket_type_id: string;
   name: string;
   quantity: number;
   unit_price: number;
+  is_bundle?: boolean;
+  bundle_items?: BundleComponent[] | null;
+}
+
+interface TicketRow {
+  id: string;
+  event_id: string;
+  ticket_type_id: string;
+  buyer_id: string;
+  seller_id: string | null;
+  order_id: string;
+  qr_token: string;
+  amount_paid: number;
+  is_complimentary: boolean;
+  parent_bundle_type_id: string | null;
+  status: "valid";
 }
 
 /**
  * Generate event_tickets rows for an approved/complimentary order.
- * Idempotent: if tickets already exist for the order, returns existing count.
+ *
+ * Bundle expansion: if an item references a bundle type, instead of
+ * generating `item.quantity` tickets of that type, we expand each
+ * bundle into its components.
+ *
+ * Example: 1× Grupo Familiar (2A + 2M) → 2 Adulto tickets + 2 Menor
+ * tickets, each with parent_bundle_type_id pointing to Grupo Familiar.
+ *
+ * The bundle's `unit_price` is distributed proportionally across the
+ * generated tickets so the order total reconciles.
+ *
+ * Idempotent: if tickets already exist for the order, returns existing.
  */
 export async function generateTicketsForOrder(
   orderId: string,
@@ -49,35 +81,61 @@ export async function generateTicketsForOrder(
   }
 
   const items = order.items as OrderItemSnapshot[];
+  const isComplimentary = order.payment_method === "cortesia";
 
-  const rows: {
-    id: string;
-    event_id: string;
-    ticket_type_id: string;
-    buyer_id: string;
-    seller_id: string | null;
-    order_id: string;
-    qr_token: string;
-    amount_paid: number;
-    is_complimentary: boolean;
-    status: "valid";
-  }[] = [];
+  const rows: TicketRow[] = [];
 
   for (const item of items) {
-    for (let i = 0; i < item.quantity; i++) {
-      const id = crypto.randomUUID();
-      rows.push({
-        id,
-        event_id: order.event_id,
-        ticket_type_id: item.ticket_type_id,
-        buyer_id: order.buyer_id,
-        seller_id: order.seller_id,
-        order_id: order.id,
-        qr_token: generateQrToken(id),
-        amount_paid: item.unit_price,
-        is_complimentary: order.payment_method === "cortesia",
-        status: "valid",
-      });
+    const isBundle = item.is_bundle && item.bundle_items && item.bundle_items.length > 0;
+
+    if (isBundle) {
+      // Expand bundle: for each ordered bundle, generate component tickets
+      const ticketsPerBundle = item.bundle_items!.reduce(
+        (s, c) => s + c.quantity,
+        0,
+      );
+      // Distribute the bundle's price proportionally across child tickets
+      const perTicketPrice =
+        ticketsPerBundle > 0 ? item.unit_price / ticketsPerBundle : 0;
+
+      for (let bIdx = 0; bIdx < item.quantity; bIdx++) {
+        for (const component of item.bundle_items!) {
+          for (let i = 0; i < component.quantity; i++) {
+            const id = crypto.randomUUID();
+            rows.push({
+              id,
+              event_id: order.event_id,
+              ticket_type_id: component.ticket_type_id,
+              buyer_id: order.buyer_id,
+              seller_id: order.seller_id,
+              order_id: order.id,
+              qr_token: generateQrToken(id),
+              amount_paid: Number(perTicketPrice.toFixed(2)),
+              is_complimentary: isComplimentary,
+              parent_bundle_type_id: item.ticket_type_id,
+              status: "valid",
+            });
+          }
+        }
+      }
+    } else {
+      // Regular type: 1 ticket per ordered quantity
+      for (let i = 0; i < item.quantity; i++) {
+        const id = crypto.randomUUID();
+        rows.push({
+          id,
+          event_id: order.event_id,
+          ticket_type_id: item.ticket_type_id,
+          buyer_id: order.buyer_id,
+          seller_id: order.seller_id,
+          order_id: order.id,
+          qr_token: generateQrToken(id),
+          amount_paid: item.unit_price,
+          is_complimentary: isComplimentary,
+          parent_bundle_type_id: null,
+          status: "valid",
+        });
+      }
     }
   }
 

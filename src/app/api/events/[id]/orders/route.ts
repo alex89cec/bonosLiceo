@@ -148,11 +148,11 @@ export async function POST(
       );
     }
 
-    // Fetch ticket types referenced in items
+    // Fetch ticket types referenced in items (+ bundle metadata)
     const typeIds = input.items.map((i) => i.ticket_type_id);
     const { data: ticketTypes, error: typesErr } = await service
       .from("event_ticket_types")
-      .select("id, name, price, quantity, is_complimentary")
+      .select("id, name, price, quantity, is_complimentary, is_bundle_only, bundle_items")
       .eq("event_id", eventId)
       .in("id", typeIds);
 
@@ -163,40 +163,70 @@ export async function POST(
       );
     }
 
-    // Compute total + verify cortesia constraint
+    // Reject is_bundle_only types from being ordered directly
+    for (const t of ticketTypes) {
+      if (t.is_bundle_only) {
+        return NextResponse.json(
+          { error: `"${t.name}" solo se vende dentro de un pack` },
+          { status: 400 },
+        );
+      }
+    }
+
+    // Compute total + build snapshot
+    // For bundles, the snapshot also stores composition for the email/admin UI
     let totalAmount = 0;
     const itemsSnapshot = input.items.map((item) => {
       const t = ticketTypes.find((tt) => tt.id === item.ticket_type_id)!;
       const unitPrice = input.payment_method === "cortesia" ? 0 : Number(t.price);
       totalAmount += unitPrice * item.quantity;
+      const components = t.bundle_items as
+        | { ticket_type_id: string; quantity: number }[]
+        | null;
       return {
         ticket_type_id: t.id,
         name: t.name,
         quantity: item.quantity,
         unit_price: unitPrice,
+        is_bundle: Boolean(components && components.length > 0),
+        bundle_items: components || null,
       };
     });
 
-    // Check stock per type (skip if quantity is null = unlimited)
+    // Stock check — for both regular types and bundles, just check
+    // the type's own quantity. Bundles have independent stock from their
+    // component types (an admin allocating "50 packs" means 50 packs total,
+    // separate from the 200 individual adults).
     for (const item of input.items) {
       const t = ticketTypes.find((tt) => tt.id === item.ticket_type_id)!;
 
       // Unlimited: no stock check
       if (t.quantity === null) continue;
 
-      // Count tickets already valid/used/pending for this type
-      const { count: currentlyTaken } = await service
-        .from("event_tickets")
-        .select("id", { count: "exact", head: true })
-        .eq("ticket_type_id", t.id)
-        .in("status", ["valid", "used"]);
+      // Count tickets already valid/used for this type
+      // (For bundles, count tickets where parent_bundle_type_id = bundle.id)
+      const isBundle = t.bundle_items && (t.bundle_items as unknown[]).length > 0;
+      const ticketsCountQuery = isBundle
+        ? service
+            .from("event_tickets")
+            .select("id", { count: "exact", head: true })
+            .eq("parent_bundle_type_id", t.id)
+            .in("status", ["valid", "used"])
+        : service
+            .from("event_tickets")
+            .select("id", { count: "exact", head: true })
+            .eq("ticket_type_id", t.id)
+            .is("parent_bundle_type_id", null) // exclude bundle-children
+            .in("status", ["valid", "used"]);
 
-      // Plus pending (orders not yet approved)
+      const { count: currentlyTaken } = await ticketsCountQuery;
+
+      // Pending orders (not yet approved) — count by item.ticket_type_id
       const { data: pendingOrders } = await service
         .from("event_orders")
         .select("items")
         .eq("event_id", eventId)
-        .eq("status", "pending_review");
+        .in("status", ["pending_review", "awaiting_receipt"]);
 
       let pendingCount = 0;
       for (const o of pendingOrders || []) {
@@ -206,11 +236,21 @@ export async function POST(
         }
       }
 
-      const taken = (currentlyTaken || 0) + pendingCount;
-      if (taken + item.quantity > t.quantity) {
+      // For bundles, "currentlyTaken" is # of bundle-instance tickets generated;
+      // we need to translate to # of bundles by dividing by tickets-per-bundle.
+      let occupied = pendingCount;
+      if (isBundle) {
+        const components = t.bundle_items as { ticket_type_id: string; quantity: number }[];
+        const ticketsPerBundle = components.reduce((s, c) => s + c.quantity, 0);
+        occupied += Math.ceil((currentlyTaken || 0) / Math.max(ticketsPerBundle, 1));
+      } else {
+        occupied += currentlyTaken || 0;
+      }
+
+      if (occupied + item.quantity > t.quantity) {
         return NextResponse.json(
           {
-            error: `No hay suficientes ${t.name}. Disponibles: ${Math.max(0, t.quantity - taken)}`,
+            error: `No hay suficientes ${t.name}. Disponibles: ${Math.max(0, t.quantity - occupied)}`,
           },
           { status: 409 },
         );

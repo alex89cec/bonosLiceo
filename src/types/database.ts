@@ -171,6 +171,11 @@ export interface Event {
   updated_at: string;
 }
 
+export interface BundleItem {
+  ticket_type_id: string;
+  quantity: number;
+}
+
 export interface EventTicketType {
   id: string;
   event_id: string;
@@ -183,6 +188,10 @@ export interface EventTicketType {
   sales_start_at: string | null;
   sales_end_at: string | null;
   is_complimentary: boolean;
+  /** When true, this type is only sold as part of a bundle (never individual). */
+  is_bundle_only: boolean;
+  /** When non-null, this type IS a bundle. Array of components. */
+  bundle_items: BundleItem[] | null;
   display_order: number;
   created_at: string;
   updated_at: string;
@@ -202,6 +211,8 @@ export interface EventTicket {
   entered_at: string | null;
   entered_by: string | null;
   is_complimentary: boolean;
+  /** If this ticket was generated from a bundle, the bundle type's id. */
+  parent_bundle_type_id: string | null;
   created_at: string;
   updated_at: string;
 }

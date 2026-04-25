@@ -73,26 +73,40 @@ export default function SellerSellEventPage() {
       const ticketTypes = (ts || []) as EventTicketType[];
       setTypes(ticketTypes);
 
-      // Compute remaining stock per type (valid + used + pending in orders)
-      // null in the result map = unlimited
+      // Compute remaining stock per type. Bundles count tickets via
+      // parent_bundle_type_id and divide by tickets-per-bundle.
       const stockResults: Record<string, number | null> = {};
       for (const t of ticketTypes) {
         if (t.quantity === null) {
-          stockResults[t.id] = null; // unlimited
+          stockResults[t.id] = null;
           continue;
         }
 
-        const { count: takenCount } = await supabase
-          .from("event_tickets")
-          .select("id", { count: "exact", head: true })
-          .eq("ticket_type_id", t.id)
-          .in("status", ["valid", "used"]);
+        const isBundle = t.bundle_items && t.bundle_items.length > 0;
+        const ticketsPerBundle = isBundle
+          ? t.bundle_items!.reduce((s, c) => s + c.quantity, 0)
+          : 1;
+
+        const ticketsCountQuery = isBundle
+          ? supabase
+              .from("event_tickets")
+              .select("id", { count: "exact", head: true })
+              .eq("parent_bundle_type_id", t.id)
+              .in("status", ["valid", "used"])
+          : supabase
+              .from("event_tickets")
+              .select("id", { count: "exact", head: true })
+              .eq("ticket_type_id", t.id)
+              .is("parent_bundle_type_id", null)
+              .in("status", ["valid", "used"]);
+
+        const { count: takenCount } = await ticketsCountQuery;
 
         const { data: pendingOrders } = await supabase
           .from("event_orders")
           .select("items")
           .eq("event_id", ev.id)
-          .eq("status", "pending_review");
+          .in("status", ["pending_review", "awaiting_receipt"]);
 
         let pending = 0;
         for (const o of pendingOrders || []) {
@@ -101,7 +115,11 @@ export default function SellerSellEventPage() {
             if (it.ticket_type_id === t.id) pending += it.quantity;
           }
         }
-        stockResults[t.id] = Math.max(0, t.quantity - (takenCount || 0) - pending);
+
+        const occupied = isBundle
+          ? Math.ceil((takenCount || 0) / Math.max(ticketsPerBundle, 1))
+          : takenCount || 0;
+        stockResults[t.id] = Math.max(0, t.quantity - occupied - pending);
       }
       setStockMap(stockResults);
       setInitLoading(false);
@@ -239,21 +257,38 @@ export default function SellerSellEventPage() {
             </p>
           )}
           {types
-            .filter((t) => !t.is_complimentary) // hide cortesia from seller
+            .filter((t) => !t.is_complimentary && !t.is_bundle_only)
             .map((t) => {
               const qty = quantities[t.id] || 0;
               const stock = stockMap[t.id];
               const isUnlimited = stock === null;
               const remaining = isUnlimited ? 50 : (stock ?? 0);
               const soldOut = !isUnlimited && remaining === 0 && qty === 0;
+              const isBundle = t.bundle_items && t.bundle_items.length > 0;
+              const bundleSummary = isBundle
+                ? t
+                    .bundle_items!.map((bi) => {
+                      const comp = types.find((x) => x.id === bi.ticket_type_id);
+                      return `${bi.quantity}× ${comp?.name || "?"}`;
+                    })
+                    .join(" + ")
+                : null;
 
               return (
                 <div key={t.id} className="card">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-semibold text-navy-700">{t.name}</p>
+                      <p className="font-semibold text-navy-700">
+                        {isBundle && "📦 "}
+                        {t.name}
+                      </p>
                       {t.description && (
                         <p className="text-xs text-navy-400">{t.description}</p>
+                      )}
+                      {bundleSummary && (
+                        <p className="mt-0.5 text-xs text-purple-600">
+                          Incluye: {bundleSummary}
+                        </p>
                       )}
                       <p className="mt-1 text-sm">
                         <span className="font-bold text-gold-600">

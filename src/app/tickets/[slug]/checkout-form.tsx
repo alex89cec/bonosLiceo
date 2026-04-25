@@ -13,7 +13,10 @@ interface InitialSeller {
 
 interface Props {
   event: Event;
+  /** Types visible for sale (filtered: no cortesía, no bundle-only) */
   ticketTypes: EventTicketType[];
+  /** All types for the event (used to resolve bundle component names) */
+  allTypes: EventTicketType[];
   stockMap: Record<string, number | null>;
   initialSeller: InitialSeller | null;
 }
@@ -21,6 +24,7 @@ interface Props {
 export default function PublicCheckout({
   event,
   ticketTypes,
+  allTypes,
   stockMap,
   initialSeller,
 }: Props) {
@@ -122,19 +126,36 @@ export default function PublicCheckout({
               const isUnlimited = stock === null;
               const remaining = isUnlimited ? 50 : stock ?? 0;
               const soldOut = !isUnlimited && remaining === 0 && qty === 0;
+              const isBundle = t.bundle_items && t.bundle_items.length > 0;
+              const bundleSummary = isBundle
+                ? t
+                    .bundle_items!.map((bi) => {
+                      const comp = allTypes.find((x) => x.id === bi.ticket_type_id);
+                      return `${bi.quantity} ${comp?.name || "?"}`;
+                    })
+                    .join(" + ")
+                : null;
 
               return (
                 <div
                   key={t.id}
                   className={`rounded-2xl border bg-white p-4 shadow-sm ${
-                    soldOut ? "border-gray-200 opacity-60" : "border-navy-100"
+                    soldOut ? "border-gray-200 opacity-60" : isBundle ? "border-purple-200 ring-1 ring-purple-100" : "border-navy-100"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-semibold text-navy-700">{t.name}</p>
+                      <p className="font-semibold text-navy-700">
+                        {isBundle && "📦 "}
+                        {t.name}
+                      </p>
                       {t.description && (
                         <p className="text-xs text-navy-400">{t.description}</p>
+                      )}
+                      {bundleSummary && (
+                        <p className="mt-0.5 text-xs font-medium text-purple-700">
+                          Incluye: {bundleSummary}
+                        </p>
                       )}
                       <p className="mt-1 text-sm">
                         <span className="font-bold text-gold-600">

@@ -61,8 +61,10 @@ export default async function PublicEventPage({ params, searchParams }: Props) {
     .eq("event_id", ev.id)
     .order("display_order", { ascending: true });
 
-  const ticketTypes = ((types as EventTicketType[] | null) ?? []).filter(
-    (t) => !t.is_complimentary,
+  // All types loaded for bundle resolution; sale-list is filtered after
+  const allTypes = (types as EventTicketType[] | null) ?? [];
+  const ticketTypes = allTypes.filter(
+    (t) => !t.is_complimentary && !t.is_bundle_only,
   );
 
   // Compute remaining stock per type
@@ -72,11 +74,26 @@ export default async function PublicEventPage({ params, searchParams }: Props) {
       stockMap[t.id] = null; // unlimited
       continue;
     }
-    const { count: takenCount } = await supabase
-      .from("event_tickets")
-      .select("id", { count: "exact", head: true })
-      .eq("ticket_type_id", t.id)
-      .in("status", ["valid", "used"]);
+
+    const isBundle = t.bundle_items && t.bundle_items.length > 0;
+    const ticketsPerBundle = isBundle
+      ? t.bundle_items!.reduce((s, c) => s + c.quantity, 0)
+      : 1;
+
+    const ticketsCountQuery = isBundle
+      ? supabase
+          .from("event_tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("parent_bundle_type_id", t.id)
+          .in("status", ["valid", "used"])
+      : supabase
+          .from("event_tickets")
+          .select("id", { count: "exact", head: true })
+          .eq("ticket_type_id", t.id)
+          .is("parent_bundle_type_id", null)
+          .in("status", ["valid", "used"]);
+
+    const { count: takenCount } = await ticketsCountQuery;
 
     const { data: pendingOrders } = await supabase
       .from("event_orders")
@@ -91,7 +108,11 @@ export default async function PublicEventPage({ params, searchParams }: Props) {
         if (it.ticket_type_id === t.id) pending += it.quantity;
       }
     }
-    stockMap[t.id] = Math.max(0, t.quantity - (takenCount || 0) - pending);
+
+    const occupiedFromTickets = isBundle
+      ? Math.ceil((takenCount || 0) / Math.max(ticketsPerBundle, 1))
+      : takenCount || 0;
+    stockMap[t.id] = Math.max(0, t.quantity - occupiedFromTickets - pending);
   }
 
   const dateStr = new Date(ev.event_date).toLocaleDateString("es-AR", {
@@ -139,6 +160,7 @@ export default async function PublicEventPage({ params, searchParams }: Props) {
         <PublicCheckout
           event={ev}
           ticketTypes={ticketTypes}
+          allTypes={allTypes}
           stockMap={stockMap}
           initialSeller={initialSeller}
         />

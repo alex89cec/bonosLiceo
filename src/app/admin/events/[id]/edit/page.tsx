@@ -455,6 +455,7 @@ function TypesTab({
         <TicketTypeForm
           eventId={eventId}
           initial={null}
+          allTypes={types}
           onDone={() => {
             setShowForm(false);
             onChange();
@@ -472,12 +473,14 @@ function TypesTab({
           const isEditing = editingId === t.id;
           const color =
             COLOR_OPTIONS.find((c) => c.value === t.color) || COLOR_OPTIONS[0];
+          const isBundle = t.bundle_items && t.bundle_items.length > 0;
 
           return isEditing ? (
             <TicketTypeForm
               key={t.id}
               eventId={eventId}
               initial={t}
+              allTypes={types}
               onDone={() => {
                 setEditingId(null);
                 onChange();
@@ -492,6 +495,7 @@ function TypesTab({
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-semibold ${color.class}`}
                     >
+                      {isBundle && "📦 "}
                       {t.name}
                     </span>
                     {t.is_complimentary && (
@@ -499,9 +503,30 @@ function TypesTab({
                         Cortesía
                       </span>
                     )}
+                    {t.is_bundle_only && (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                        Solo en packs
+                      </span>
+                    )}
+                    {isBundle && (
+                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                        Pack
+                      </span>
+                    )}
                   </div>
                   {t.description && (
                     <p className="mt-1 text-xs text-navy-400">{t.description}</p>
+                  )}
+                  {isBundle && (
+                    <p className="mt-1 text-xs text-purple-700">
+                      Incluye:{" "}
+                      {t.bundle_items!
+                        .map((bi) => {
+                          const comp = types.find((x) => x.id === bi.ticket_type_id);
+                          return `${bi.quantity}× ${comp?.name || "?"}`;
+                        })
+                        .join(" + ")}
+                    </p>
                   )}
                   <div className="mt-2 flex flex-wrap gap-3 text-sm">
                     <span className="font-bold text-navy-700">
@@ -533,11 +558,13 @@ function TypesTab({
 function TicketTypeForm({
   eventId,
   initial,
+  allTypes,
   onDone,
   onCancel,
 }: {
   eventId: string;
   initial: EventTicketType | null;
+  allTypes: EventTicketType[];
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -552,12 +579,60 @@ function TicketTypeForm({
   const [isComplimentary, setIsComplimentary] = useState(
     initial?.is_complimentary ?? false,
   );
+  const [isBundleOnly, setIsBundleOnly] = useState(
+    initial?.is_bundle_only ?? false,
+  );
+  const [isBundle, setIsBundle] = useState(
+    Boolean(initial?.bundle_items && initial.bundle_items.length > 0),
+  );
+  const [bundleItems, setBundleItems] = useState<
+    { ticket_type_id: string; quantity: number }[]
+  >(initial?.bundle_items ?? []);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Candidate component types: any other type that isn't itself a bundle
+  // (no nested bundles for now) and that exists in this event
+  const candidateComponents = allTypes.filter(
+    (t) =>
+      t.id !== initial?.id &&
+      (!t.bundle_items || t.bundle_items.length === 0),
+  );
+
+  function addBundleComponent(typeId: string) {
+    if (bundleItems.find((b) => b.ticket_type_id === typeId)) return;
+    setBundleItems((prev) => [...prev, { ticket_type_id: typeId, quantity: 1 }]);
+  }
+
+  function removeBundleComponent(typeId: string) {
+    setBundleItems((prev) => prev.filter((b) => b.ticket_type_id !== typeId));
+  }
+
+  function updateBundleComponentQty(typeId: string, qty: number) {
+    setBundleItems((prev) =>
+      prev.map((b) =>
+        b.ticket_type_id === typeId
+          ? { ...b, quantity: Math.max(1, Math.min(20, qty)) }
+          : b,
+      ),
+    );
+  }
 
   async function submit() {
     setSaving(true);
     setErr(null);
+
+    if (isBundle && isBundleOnly) {
+      setErr("Un type no puede ser pack y solo-en-packs a la vez");
+      setSaving(false);
+      return;
+    }
+    if (isBundle && bundleItems.length === 0) {
+      setErr("Un pack tiene que tener al menos un componente");
+      setSaving(false);
+      return;
+    }
+
     try {
       const body = {
         name,
@@ -566,6 +641,8 @@ function TicketTypeForm({
         quantity: unlimited ? null : Number(quantity),
         color,
         is_complimentary: isComplimentary,
+        is_bundle_only: isBundleOnly,
+        bundle_items: isBundle && bundleItems.length > 0 ? bundleItems : null,
       };
       const url = initial
         ? `/api/events/${eventId}/ticket-types/${initial.id}`
@@ -690,6 +767,145 @@ function TicketTypeForm({
         />
         <span className="text-sm text-navy-700">Cortesía (solo admin emite, sin pago)</span>
       </label>
+
+      {/* Bundle settings */}
+      <div className="rounded-xl border border-navy-100 bg-white p-3">
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            checked={isBundleOnly}
+            onChange={(e) => {
+              setIsBundleOnly(e.target.checked);
+              if (e.target.checked) setIsBundle(false);
+            }}
+            disabled={isBundle}
+            className="mt-0.5 h-4 w-4 accent-gold-500"
+          />
+          <div>
+            <p className="text-sm font-medium text-navy-700">Solo se vende dentro de packs</p>
+            <p className="text-xs text-navy-400">
+              Útil para componentes (ej: Menor) que solo se incluyen como parte de un pack.
+            </p>
+          </div>
+        </label>
+
+        <hr className="my-3 border-navy-100" />
+
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            checked={isBundle}
+            onChange={(e) => {
+              setIsBundle(e.target.checked);
+              if (e.target.checked) setIsBundleOnly(false);
+            }}
+            disabled={isBundleOnly}
+            className="mt-0.5 h-4 w-4 accent-gold-500"
+          />
+          <div>
+            <p className="text-sm font-medium text-navy-700">Es un pack/bundle</p>
+            <p className="text-xs text-navy-400">
+              Vendido como una unidad pero genera múltiples entradas con QR cada una.
+            </p>
+          </div>
+        </label>
+
+        {isBundle && (
+          <div className="mt-3 space-y-2 border-t border-navy-100 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
+              Componentes del pack
+            </p>
+
+            {bundleItems.length === 0 && (
+              <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-700">
+                Agregá al menos un componente abajo.
+              </p>
+            )}
+
+            {bundleItems.map((bi) => {
+              const comp = candidateComponents.find((c) => c.id === bi.ticket_type_id);
+              if (!comp) return null;
+              return (
+                <div
+                  key={bi.ticket_type_id}
+                  className="flex items-center gap-2 rounded-lg bg-navy-50 px-2 py-1.5"
+                >
+                  <span className="flex-1 text-sm text-navy-700">{comp.name}</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={bi.quantity}
+                    onChange={(e) =>
+                      updateBundleComponentQty(bi.ticket_type_id, Number(e.target.value))
+                    }
+                    className="w-16 rounded-md border border-navy-200 bg-white px-2 py-1 text-center text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeBundleComponent(bi.ticket_type_id)}
+                    className="rounded-md p-1 text-red-500 hover:bg-red-50"
+                    aria-label="Quitar"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
+
+            {/* Add component dropdown */}
+            {candidateComponents.length > 0 ? (
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    addBundleComponent(e.target.value);
+                    e.target.value = "";
+                  }
+                }}
+                className="input-field text-sm"
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  + Agregar componente
+                </option>
+                {candidateComponents
+                  .filter((c) => !bundleItems.find((b) => b.ticket_type_id === c.id))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.is_bundle_only ? "(solo en packs)" : ""}
+                    </option>
+                  ))}
+              </select>
+            ) : (
+              <p className="text-xs text-navy-400">
+                Creá primero al menos un type individual para usar como componente.
+              </p>
+            )}
+
+            {bundleItems.length > 0 && (
+              <p className="text-xs text-navy-500">
+                Total entradas generadas por pack:{" "}
+                <strong>
+                  {bundleItems.reduce((s, b) => s + b.quantity, 0)}
+                </strong>
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {err && <div className="rounded-xl bg-red-50 p-2 text-xs text-red-600">{err}</div>}
 

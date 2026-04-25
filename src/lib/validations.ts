@@ -98,6 +98,12 @@ export const eventSchema = z.object({
   transfer_instructions: z.string().max(1000).optional().nullable(),
 });
 
+// Bundle component
+export const bundleItemSchema = z.object({
+  ticket_type_id: z.string().uuid(),
+  quantity: z.number().int().positive().max(20),
+});
+
 // Base object schema (ZodObject — supports .partial() for PATCH/PUT)
 export const eventTicketTypeBaseSchema = z.object({
   name: z.string().min(1).max(100),
@@ -110,21 +116,33 @@ export const eventTicketTypeBaseSchema = z.object({
   sales_end_at: z.string().datetime().optional().nullable(),
   is_complimentary: z.boolean().default(false),
   display_order: z.number().int().default(0),
+  /** Solo se vende dentro de bundles */
+  is_bundle_only: z.boolean().default(false),
+  /** Si está definido, este type es un bundle */
+  bundle_items: z.array(bundleItemSchema).min(1).optional().nullable(),
 });
 
 // Full schema with cross-field validation, used for creates
-export const eventTicketTypeSchema = eventTicketTypeBaseSchema.refine(
-  (data) => {
-    if (data.sales_start_at && data.sales_end_at) {
-      return new Date(data.sales_end_at) > new Date(data.sales_start_at);
-    }
-    return true;
-  },
-  {
-    message: "La fecha de fin de ventas debe ser posterior al inicio",
-    path: ["sales_end_at"],
-  },
-);
+export const eventTicketTypeSchema = eventTicketTypeBaseSchema
+  .refine(
+    (data) => {
+      if (data.sales_start_at && data.sales_end_at) {
+        return new Date(data.sales_end_at) > new Date(data.sales_start_at);
+      }
+      return true;
+    },
+    {
+      message: "La fecha de fin de ventas debe ser posterior al inicio",
+      path: ["sales_end_at"],
+    },
+  )
+  .refine(
+    (data) => !(data.is_bundle_only === true && data.bundle_items),
+    {
+      message: "Un type no puede ser bundle y solo-en-bundles a la vez",
+      path: ["bundle_items"],
+    },
+  );
 
 export const eventSellerAssignmentSchema = z.object({
   seller_id: z.string().uuid(),
