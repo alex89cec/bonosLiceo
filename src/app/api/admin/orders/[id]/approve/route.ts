@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { generateTicketsForOrder } from "@/lib/event-tickets";
+import {
+  generateTicketsForOrder,
+  sendOrderTicketsEmail,
+} from "@/lib/event-tickets";
 
 export const maxDuration = 30;
 
@@ -85,6 +88,11 @@ export async function POST(
         { status: 500 },
       );
     }
+
+    // Fire-and-forget email with QR codes
+    sendOrderTicketsEmail(id).catch((err) => {
+      console.error("Tickets email send failed:", err);
+    });
 
     return NextResponse.json({
       success: true,

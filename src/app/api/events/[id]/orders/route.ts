@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { z } from "zod";
 import { emailSchema } from "@/lib/validations";
-import { generateTicketsForOrder } from "@/lib/event-tickets";
+import {
+  generateTicketsForOrder,
+  sendOrderTicketsEmail,
+} from "@/lib/event-tickets";
 import { sendTransferInstructionsEmail } from "@/lib/email";
 
 export const maxDuration = 60;
@@ -425,12 +428,16 @@ export async function POST(
       );
     }
 
-    // If cortesía, generate tickets immediately (auto-approved)
+    // If cortesía, generate tickets immediately (auto-approved) and email QRs
     if (input.payment_method === "cortesia") {
       const result = await generateTicketsForOrder(order.id);
       if (!result.success) {
         console.error("Ticket generation error:", result.error);
         // Don't fail the request — the order is in DB; admin can retry
+      } else {
+        sendOrderTicketsEmail(order.id).catch((err) => {
+          console.error("Cortesia email send failed:", err);
+        });
       }
     }
 

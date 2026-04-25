@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { generateQrToken } from "@/lib/qr-token";
+import { sendApprovedTicketsEmail } from "@/lib/email";
 
 interface BundleComponent {
   ticket_type_id: string;
@@ -150,4 +151,93 @@ export async function generateTicketsForOrder(
     count: rows.length,
     ticketIds: rows.map((r) => r.id),
   };
+}
+
+/**
+ * Fetch all data needed and send the approved-tickets email to the buyer.
+ * Safe to call multiple times (resend).
+ */
+export async function sendOrderTicketsEmail(
+  orderId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const service = createServiceRoleClient();
+
+  // Fetch order + buyer + event in one query
+  const { data: order, error } = await service
+    .from("event_orders")
+    .select(
+      `
+      id, status, total_amount, payment_method,
+      events:event_id (id, name, event_date, venue, image_url),
+      buyers:buyer_id (email, full_name)
+    `,
+    )
+    .eq("id", orderId)
+    .single();
+
+  if (error || !order) {
+    return { success: false, error: "Order not found" };
+  }
+
+  const event = order.events as unknown as {
+    id: string;
+    name: string;
+    event_date: string;
+    venue: string | null;
+    image_url: string | null;
+  } | null;
+  const buyer = order.buyers as unknown as {
+    email: string;
+    full_name: string | null;
+  } | null;
+
+  if (!event || !buyer) {
+    return { success: false, error: "Missing event or buyer data" };
+  }
+
+  // Fetch tickets with their type info
+  const { data: tickets } = await service
+    .from("event_tickets")
+    .select(
+      `
+      id, qr_token, amount_paid, parent_bundle_type_id,
+      ticket_type:ticket_type_id (id, name, color),
+      parent_bundle:parent_bundle_type_id (id, name)
+    `,
+    )
+    .eq("order_id", orderId)
+    .order("created_at", { ascending: true });
+
+  if (!tickets || tickets.length === 0) {
+    return { success: false, error: "No tickets to send" };
+  }
+
+  const ticketRows = tickets.map((t) => {
+    const tt = t.ticket_type as unknown as {
+      id: string;
+      name: string;
+      color: string | null;
+    } | null;
+    const pb = t.parent_bundle as unknown as { id: string; name: string } | null;
+    return {
+      id: t.id as string,
+      qrToken: t.qr_token as string,
+      typeName: tt?.name || "Entrada",
+      typeColor: tt?.color || null,
+      amountPaid: (t.amount_paid as number | null) ?? null,
+      bundleParentName: pb?.name || null,
+    };
+  });
+
+  return await sendApprovedTicketsEmail({
+    buyerName: buyer.full_name,
+    buyerEmail: buyer.email,
+    eventName: event.name,
+    eventDate: event.event_date,
+    eventVenue: event.venue,
+    eventImageUrl: event.image_url,
+    totalAmount: Number(order.total_amount),
+    tickets: ticketRows,
+    isComplimentary: order.payment_method === "cortesia",
+  });
 }

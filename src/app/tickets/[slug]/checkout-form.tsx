@@ -496,9 +496,15 @@ export default function PublicCheckout({
       <p className="mb-1 text-sm text-green-700">
         Recibimos tu compra y el comprobante.
       </p>
-      <p className="text-xs text-green-600">
+      <p className="mb-4 text-xs text-green-600">
         Vamos a revisar el pago y enviarte las entradas a <strong>{buyerEmail}</strong>.
       </p>
+      <a
+        href={`/mis-entradas?email=${encodeURIComponent(buyerEmail)}`}
+        className="inline-block rounded-xl border border-green-300 bg-white px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100"
+      >
+        Ver mis entradas
+      </a>
     </div>
   );
 }
