@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { eventTicketTypeSchema } from "@/lib/validations";
+import { eventTicketTypeBaseSchema } from "@/lib/validations";
 
 /** PUT /api/events/[id]/ticket-types/[typeId] — update ticket type */
 export async function PUT(
@@ -29,7 +29,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const parsed = eventTicketTypeSchema.partial().safeParse(body);
+    const parsed = eventTicketTypeBaseSchema.partial().safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(

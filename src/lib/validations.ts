@@ -91,31 +91,33 @@ export const eventSchema = z.object({
   status: z.enum(["draft", "active", "past", "cancelled"]).default("draft"),
 });
 
-export const eventTicketTypeSchema = z
-  .object({
-    name: z.string().min(1).max(100),
-    description: z.string().optional().nullable(),
-    price: z.number().min(0),
-    /** null o ausente = sin cupo (ilimitado) */
-    quantity: z.number().int().positive().nullable().optional(),
-    color: z.string().min(1).max(20).default("gray"),
-    sales_start_at: z.string().datetime().optional().nullable(),
-    sales_end_at: z.string().datetime().optional().nullable(),
-    is_complimentary: z.boolean().default(false),
-    display_order: z.number().int().default(0),
-  })
-  .refine(
-    (data) => {
-      if (data.sales_start_at && data.sales_end_at) {
-        return new Date(data.sales_end_at) > new Date(data.sales_start_at);
-      }
-      return true;
-    },
-    {
-      message: "La fecha de fin de ventas debe ser posterior al inicio",
-      path: ["sales_end_at"],
-    },
-  );
+// Base object schema (ZodObject — supports .partial() for PATCH/PUT)
+export const eventTicketTypeBaseSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional().nullable(),
+  price: z.number().min(0),
+  /** null o ausente = sin cupo (ilimitado) */
+  quantity: z.number().int().positive().nullable().optional(),
+  color: z.string().min(1).max(20).default("gray"),
+  sales_start_at: z.string().datetime().optional().nullable(),
+  sales_end_at: z.string().datetime().optional().nullable(),
+  is_complimentary: z.boolean().default(false),
+  display_order: z.number().int().default(0),
+});
+
+// Full schema with cross-field validation, used for creates
+export const eventTicketTypeSchema = eventTicketTypeBaseSchema.refine(
+  (data) => {
+    if (data.sales_start_at && data.sales_end_at) {
+      return new Date(data.sales_end_at) > new Date(data.sales_start_at);
+    }
+    return true;
+  },
+  {
+    message: "La fecha de fin de ventas debe ser posterior al inicio",
+    path: ["sales_end_at"],
+  },
+);
 
 export const eventSellerAssignmentSchema = z.object({
   seller_id: z.string().uuid(),
