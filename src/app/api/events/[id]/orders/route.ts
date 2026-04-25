@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supab
 import { z } from "zod";
 import { emailSchema } from "@/lib/validations";
 import { generateTicketsForOrder } from "@/lib/event-tickets";
+import { sendTransferInstructionsEmail } from "@/lib/email";
 
 export const maxDuration = 60;
 
@@ -20,6 +21,8 @@ const orderInputSchema = z.object({
   buyer_phone: z.string().optional().nullable(),
   items: z.array(orderItemSchema).min(1),
   payment_method: z.enum(["transferencia", "cortesia"]),
+  /** If true, the order is created without a receipt; status=awaiting_receipt */
+  is_preventa: z.boolean().optional().default(false),
   notes: z.string().optional().nullable(),
 });
 
@@ -120,7 +123,9 @@ export async function POST(
     // Fetch event + verify it's bookable
     const { data: event, error: eventErr } = await service
       .from("events")
-      .select("id, status, name")
+      .select(
+        "id, status, name, event_date, venue, transfer_holder_name, transfer_cbu, transfer_alias, transfer_bank, transfer_id_number, transfer_instructions",
+      )
       .eq("id", eventId)
       .single();
 
@@ -204,8 +209,24 @@ export async function POST(
       }
     }
 
-    // Validate receipt
-    if (input.payment_method === "transferencia") {
+    // Preventa is only allowed for sellers/admins (not for public)
+    if (input.is_preventa && role === "public") {
+      return NextResponse.json(
+        { error: "El comprobante es obligatorio en compras desde la web" },
+        { status: 400 },
+      );
+    }
+
+    // Cortesia + preventa is meaningless
+    if (input.is_preventa && input.payment_method === "cortesia") {
+      return NextResponse.json(
+        { error: "Las cortesías no pueden ser preventa" },
+        { status: 400 },
+      );
+    }
+
+    // Validate receipt (skip if preventa or cortesia)
+    if (input.payment_method === "transferencia" && !input.is_preventa) {
       if (!file || !(file instanceof File)) {
         return NextResponse.json(
           { error: "El comprobante de transferencia es obligatorio" },
@@ -286,8 +307,14 @@ export async function POST(
     }
 
     // Determine initial status
-    const initialStatus =
-      input.payment_method === "cortesia" ? "complimentary" : "pending_review";
+    let initialStatus: "complimentary" | "pending_review" | "awaiting_receipt";
+    if (input.payment_method === "cortesia") {
+      initialStatus = "complimentary";
+    } else if (input.is_preventa) {
+      initialStatus = "awaiting_receipt";
+    } else {
+      initialStatus = "pending_review";
+    }
 
     // Insert order
     const { data: order, error: orderErr } = await service
@@ -328,6 +355,45 @@ export async function POST(
         console.error("Ticket generation error:", result.error);
         // Don't fail the request — the order is in DB; admin can retry
       }
+    }
+
+    // If preventa (awaiting_receipt), send transfer instructions email to buyer
+    if (input.is_preventa && initialStatus === "awaiting_receipt") {
+      // Fetch seller info if applicable
+      let sellerName: string | null = null;
+      let sellerEmail: string | null = null;
+      if (role === "seller" && user) {
+        const { data: sellerProfile } = await service
+          .from("profiles")
+          .select("full_name, email")
+          .eq("id", user.id)
+          .single();
+        if (sellerProfile) {
+          sellerName = sellerProfile.full_name;
+          sellerEmail = sellerProfile.email;
+        }
+      }
+
+      // Fire-and-forget — don't block the response
+      sendTransferInstructionsEmail({
+        buyerName: input.buyer_name,
+        buyerEmail: input.buyer_email,
+        eventName: event.name,
+        eventDate: event.event_date,
+        eventVenue: event.venue,
+        items: itemsSnapshot,
+        totalAmount,
+        holderName: event.transfer_holder_name,
+        cbu: event.transfer_cbu,
+        alias: event.transfer_alias,
+        bank: event.transfer_bank,
+        idNumber: event.transfer_id_number,
+        instructions: event.transfer_instructions,
+        sellerName,
+        sellerEmail,
+      }).catch((err) => {
+        console.error("Transfer email send failed:", err);
+      });
     }
 
     return NextResponse.json({ order }, { status: 201 });

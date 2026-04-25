@@ -23,6 +23,7 @@ interface OrderRow {
 }
 
 const STATUS_FILTERS = [
+  { key: "awaiting_receipt", label: "Esperando comprobante" },
   { key: "pending_review", label: "Pendientes" },
   { key: "approved", label: "Aprobadas" },
   { key: "rejected", label: "Rechazadas" },
@@ -141,9 +142,11 @@ function OrderCard({
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const totalQty = order.items.reduce((s, i) => s + i.quantity, 0);
   const isPending = order.status === "pending_review";
+  const isAwaitingReceipt = order.status === "awaiting_receipt";
 
   async function loadReceiptUrl() {
     if (!order.receipt_url || receiptUrl) return;
@@ -192,6 +195,33 @@ function OrderCard({
       if (!res.ok) {
         setActionError(json.error || "Error al rechazar");
       } else {
+        onAction();
+      }
+    } catch {
+      setActionError("Error de red");
+    }
+    setActionLoading(null);
+  }
+
+  async function uploadReceipt() {
+    if (!receiptFile) {
+      setActionError("Seleccioná un archivo");
+      return;
+    }
+    setActionLoading("upload");
+    setActionError(null);
+    try {
+      const fd = new FormData();
+      fd.append("receipt", receiptFile);
+      const res = await fetch(`/api/orders/${order.id}/upload-receipt`, {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setActionError(json.error || "Error al subir comprobante");
+      } else {
+        setReceiptFile(null);
         onAction();
       }
     } catch {
@@ -332,6 +362,36 @@ function OrderCard({
             </div>
           )}
 
+          {/* Upload receipt (for awaiting_receipt orders) */}
+          {isAwaitingReceipt && (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+              <p className="mb-2 text-sm font-semibold text-orange-800">
+                📤 Subir comprobante
+              </p>
+              <p className="mb-3 text-xs text-orange-700">
+                Esta orden está esperando el comprobante. Subilo y pasa a revisión.
+              </p>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                className="block w-full rounded-xl border border-orange-200 bg-white p-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-navy-700 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
+              />
+              {receiptFile && (
+                <p className="mt-2 text-xs text-orange-700">
+                  📎 {receiptFile.name} ({(receiptFile.size / 1024).toFixed(0)} KB)
+                </p>
+              )}
+              <button
+                onClick={uploadReceipt}
+                disabled={!receiptFile || actionLoading !== null}
+                className="btn-gold mt-3 w-full text-sm disabled:opacity-50"
+              >
+                {actionLoading === "upload" ? "Subiendo..." : "Subir y enviar a revisión"}
+              </button>
+            </div>
+          )}
+
           {/* Actions */}
           {isPending && canApprove && !showRejectForm && (
             <div className="flex gap-2">
@@ -392,6 +452,7 @@ function OrderCard({
 
 function StatusBadge({ status }: { status: string }) {
   const cfg: Record<string, { label: string; bg: string }> = {
+    awaiting_receipt: { label: "Esperando comprobante", bg: "bg-orange-100 text-orange-700" },
     pending_review: { label: "Pendiente", bg: "bg-amber-100 text-amber-700" },
     approved: { label: "Aprobada", bg: "bg-green-100 text-green-700" },
     rejected: { label: "Rechazada", bg: "bg-red-100 text-red-700" },

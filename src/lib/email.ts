@@ -348,3 +348,147 @@ export async function sendPasswordResetEmail(
     return { success: false, error: "Error al enviar email" };
   }
 }
+
+// ── Transfer instructions email (preventa) ──
+
+export interface TransferInstructionsData {
+  buyerName: string | null;
+  buyerEmail: string;
+  eventName: string;
+  eventDate: string;
+  eventVenue: string | null;
+  items: { name: string; quantity: number; unit_price: number }[];
+  totalAmount: number;
+  // Transfer data
+  holderName: string | null;
+  cbu: string | null;
+  alias: string | null;
+  bank: string | null;
+  idNumber: string | null;
+  instructions: string | null;
+  // Seller (recipient of receipt)
+  sellerName: string | null;
+  sellerEmail: string | null;
+}
+
+export async function sendTransferInstructionsEmail(
+  data: TransferInstructionsData,
+): Promise<{ success: boolean; error?: string }> {
+  const greeting = data.buyerName ? `¡Hola ${data.buyerName}!` : "¡Hola!";
+  const dateStr = new Date(data.eventDate).toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const itemsRows = data.items
+    .map(
+      (it) => `
+      <tr>
+        <td style="padding:8px 0;color:#475569;font-size:14px;">${it.quantity}× ${it.name}</td>
+        <td style="padding:8px 0;text-align:right;font-weight:600;color:#1e293b;font-size:14px;">$${(it.unit_price * it.quantity).toLocaleString("es-AR")}</td>
+      </tr>`,
+    )
+    .join("");
+
+  // Build transfer rows dynamically (only show fields that have a value)
+  const transferRows: { label: string; value: string; mono?: boolean }[] = [];
+  if (data.holderName) transferRows.push({ label: "Titular", value: data.holderName });
+  if (data.bank) transferRows.push({ label: "Banco", value: data.bank });
+  if (data.cbu) transferRows.push({ label: "CBU", value: data.cbu, mono: true });
+  if (data.alias) transferRows.push({ label: "Alias", value: data.alias, mono: true });
+  if (data.idNumber) transferRows.push({ label: "CUIT/DNI", value: data.idNumber, mono: true });
+
+  const transferRowsHtml = transferRows
+    .map(
+      (r) => `
+        <tr>
+          <td style="padding:8px 0;color:#64748b;font-size:14px;width:80px;">${r.label}</td>
+          <td style="padding:8px 0;text-align:right;font-weight:700;color:#1e293b;font-size:14px;${r.mono ? "font-family:monospace;" : ""}">${r.value}</td>
+        </tr>`,
+    )
+    .join("");
+
+  const sellerInfo =
+    data.sellerName || data.sellerEmail
+      ? `
+    <div style="background:#fff7ed;border:2px solid #fb923c;border-radius:12px;padding:20px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-weight:700;color:#9a3412;font-size:14px;">📤 Una vez hecha la transferencia</p>
+      <p style="margin:0;color:#7c2d12;font-size:14px;line-height:1.5;">
+        Enviá el comprobante a tu vendedor:
+        ${data.sellerName ? `<strong>${data.sellerName}</strong>` : ""}
+        ${data.sellerEmail ? `<br><a href="mailto:${data.sellerEmail}" style="color:#9a3412;">${data.sellerEmail}</a>` : ""}
+      </p>
+    </div>`
+      : `
+    <div style="background:#fff7ed;border:2px solid #fb923c;border-radius:12px;padding:20px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-weight:700;color:#9a3412;font-size:14px;">📤 Una vez hecha la transferencia</p>
+      <p style="margin:0;color:#7c2d12;font-size:14px;line-height:1.5;">
+        Enviá el comprobante a quien te vendió la entrada para confirmar la compra.
+      </p>
+    </div>`;
+
+  const html = emailLayout(`
+    <h2 style="margin:0 0 8px;color:#1e293b;font-size:22px;">${greeting}</h2>
+    <p style="color:#64748b;font-size:15px;line-height:1.6;">
+      Tu reserva para <strong style="color:#1e293b;">${data.eventName}</strong> está esperando el pago. A continuación encontrarás los datos para la transferencia.
+    </p>
+
+    <!-- Event info -->
+    <div style="background:#f8fafc;border-radius:12px;padding:16px 20px;margin:20px 0;">
+      <p style="margin:0 0 4px;font-weight:600;color:#1e293b;font-size:15px;">${data.eventName}</p>
+      <p style="margin:0;color:#64748b;font-size:13px;">
+        📅 ${dateStr}
+        ${data.eventVenue ? `<br>📍 ${data.eventVenue}` : ""}
+      </p>
+    </div>
+
+    <!-- Items -->
+    <div style="margin:20px 0;">
+      <p style="margin:0 0 8px;font-weight:700;color:#1e293b;font-size:14px;">Detalle</p>
+      <table style="width:100%;border-collapse:collapse;">
+        ${itemsRows}
+        <tr style="border-top:1px solid #e2e8f0;">
+          <td style="padding:12px 0;color:#1e293b;font-size:15px;font-weight:700;">Total a transferir</td>
+          <td style="padding:12px 0;text-align:right;font-weight:800;color:#1e293b;font-size:18px;">$${data.totalAmount.toLocaleString("es-AR")}</td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Transfer data -->
+    <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:20px;margin:24px 0;">
+      <p style="margin:0 0 12px;font-weight:700;color:#92400e;font-size:14px;">💸 Datos para transferencia</p>
+      <table style="width:100%;border-collapse:collapse;">
+        ${transferRowsHtml}
+      </table>
+      ${data.instructions ? `<p style="margin:12px 0 0;padding-top:12px;border-top:1px solid #fde68a;color:#78350f;font-size:13px;line-height:1.5;">${data.instructions}</p>` : ""}
+    </div>
+
+    ${sellerInfo}
+
+    <p style="color:#94a3b8;font-size:12px;text-align:center;margin-top:24px;">
+      Cuando se confirme el pago vas a recibir tus entradas con QR por email.
+    </p>
+  `);
+
+  try {
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: data.buyerEmail,
+      subject: `Datos para tu transferencia — ${data.eventName}`,
+      html,
+    });
+
+    if (error) {
+      console.error("Resend transfer email error:", error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("Transfer email send error:", err);
+    return { success: false, error: "Error al enviar email" };
+  }
+}

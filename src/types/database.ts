@@ -159,6 +159,13 @@ export interface Event {
   venue: string | null;
   image_url: string | null;
   status: EventStatus;
+  // Transfer data (used when payment_method=transferencia)
+  transfer_holder_name: string | null;
+  transfer_cbu: string | null;
+  transfer_alias: string | null;
+  transfer_bank: string | null;
+  transfer_id_number: string | null;
+  transfer_instructions: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -219,6 +226,7 @@ export interface EventScanLog {
 }
 
 export type EventOrderStatus =
+  | "awaiting_receipt"
   | "pending_review"
   | "approved"
   | "rejected"

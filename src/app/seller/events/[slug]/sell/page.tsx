@@ -27,6 +27,8 @@ export default function SellerSellEventPage() {
   const [buyerPhone, setBuyerPhone] = useState("");
   const [receipt, setReceipt] = useState<File | null>(null);
   const [notes, setNotes] = useState("");
+  /** Receipt mode: "now" = upload now, "preventa" = no receipt yet, email transfer data */
+  const [receiptMode, setReceiptMode] = useState<"now" | "preventa">("now");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -127,12 +129,13 @@ export default function SellerSellEventPage() {
         buyer_phone: buyerPhone || null,
         items,
         payment_method: "transferencia",
+        is_preventa: receiptMode === "preventa",
         notes: notes || null,
       };
 
       const formData = new FormData();
       formData.append("data", JSON.stringify(data));
-      if (receipt) formData.append("receipt", receipt);
+      if (receipt && receiptMode === "now") formData.append("receipt", receipt);
 
       const res = await fetch(`/api/events/${event.id}/orders`, {
         method: "POST",
@@ -371,9 +374,9 @@ export default function SellerSellEventPage() {
           Volver
         </button>
 
-        <h2 className="mb-2 text-xl font-bold text-navy-700">Comprobante de transferencia</h2>
+        <h2 className="mb-2 text-xl font-bold text-navy-700">Comprobante</h2>
         <p className="mb-4 text-sm text-navy-400">
-          Subí el comprobante de la transferencia. Un administrador va a revisarlo y aprobar la venta.
+          Elegí cómo gestionar el comprobante de transferencia.
         </p>
 
         {/* Resumen */}
@@ -399,23 +402,79 @@ export default function SellerSellEventPage() {
           </div>
         </div>
 
-        {/* Receipt upload */}
-        <div className="card">
-          <label className="mb-2 block text-sm font-semibold text-navy-700">
-            Comprobante (PDF, JPG, PNG, WEBP — máx 5MB) *
+        {/* Mode selector */}
+        <div className="card mb-4 space-y-2">
+          <p className="mb-1 text-sm font-semibold text-navy-700">¿Tenés el comprobante?</p>
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-navy-200 p-3 transition-all has-[:checked]:border-gold-500 has-[:checked]:bg-gold-50">
+            <input
+              type="radio"
+              name="receiptMode"
+              value="now"
+              checked={receiptMode === "now"}
+              onChange={() => setReceiptMode("now")}
+              className="mt-1 h-4 w-4 accent-gold-500"
+            />
+            <div>
+              <p className="text-sm font-medium text-navy-700">Sí, lo tengo ahora</p>
+              <p className="text-xs text-navy-400">
+                Subí el comprobante. La orden pasa directo a revisión del admin.
+              </p>
+            </div>
           </label>
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            onChange={(e) => setReceipt(e.target.files?.[0] || null)}
-            className="block w-full rounded-xl border border-navy-200 bg-white p-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-navy-700 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
-          />
-          {receipt && (
-            <p className="mt-2 text-xs text-navy-500">
-              📎 {receipt.name} ({(receipt.size / 1024).toFixed(0)} KB)
-            </p>
-          )}
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-navy-200 p-3 transition-all has-[:checked]:border-gold-500 has-[:checked]:bg-gold-50">
+            <input
+              type="radio"
+              name="receiptMode"
+              value="preventa"
+              checked={receiptMode === "preventa"}
+              onChange={() => setReceiptMode("preventa")}
+              className="mt-1 h-4 w-4 accent-gold-500"
+            />
+            <div>
+              <p className="text-sm font-medium text-navy-700">Preventa (sin comprobante)</p>
+              <p className="text-xs text-navy-400">
+                El comprador recibe un email con los datos de transferencia. Subís el comprobante después.
+              </p>
+            </div>
+          </label>
         </div>
+
+        {/* Receipt upload (only if mode = now) */}
+        {receiptMode === "now" && (
+          <div className="card">
+            <label className="mb-2 block text-sm font-semibold text-navy-700">
+              Comprobante (PDF, JPG, PNG, WEBP — máx 5MB) *
+            </label>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={(e) => setReceipt(e.target.files?.[0] || null)}
+              className="block w-full rounded-xl border border-navy-200 bg-white p-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-navy-700 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-white"
+            />
+            {receipt && (
+              <p className="mt-2 text-xs text-navy-500">
+                📎 {receipt.name} ({(receipt.size / 1024).toFixed(0)} KB)
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Preventa info */}
+        {receiptMode === "preventa" && (
+          <div className="card border-amber-200 bg-amber-50/40">
+            <p className="text-sm font-semibold text-amber-800">
+              📨 Se enviará un email al comprador con:
+            </p>
+            <ul className="mt-2 list-inside list-disc space-y-0.5 text-xs text-amber-700">
+              <li>Datos para la transferencia (titular, CBU, alias)</li>
+              <li>Total a transferir</li>
+              <li>Tu nombre y email para que te envíe el comprobante</li>
+            </ul>
+            <p className="mt-3 text-xs text-amber-700">
+              Cuando recibas el comprobante, lo cargás desde tu lista de órdenes y la orden pasa a revisión del admin.
+            </p>
+          </div>
+        )}
 
         <div className="card mt-4">
           <label htmlFor="notes" className="mb-1.5 block text-sm font-semibold text-navy-700">
@@ -438,7 +497,7 @@ export default function SellerSellEventPage() {
 
         <button
           className="btn-gold mt-4 w-full"
-          disabled={!receipt || submitting}
+          disabled={(receiptMode === "now" && !receipt) || submitting}
           onClick={submit}
         >
           {submitting ? (
@@ -446,6 +505,8 @@ export default function SellerSellEventPage() {
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy-700 border-t-transparent" />
               Enviando...
             </span>
+          ) : receiptMode === "preventa" ? (
+            "Crear preventa y enviar datos"
           ) : (
             "Enviar para aprobación"
           )}
@@ -462,9 +523,13 @@ export default function SellerSellEventPage() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
       </div>
-      <h2 className="mb-1 text-xl font-bold text-navy-700">Orden enviada</h2>
+      <h2 className="mb-1 text-xl font-bold text-navy-700">
+        {receiptMode === "preventa" ? "Preventa creada" : "Orden enviada"}
+      </h2>
       <p className="mb-6 text-sm text-navy-400">
-        El administrador va a revisar el comprobante. Cuando se apruebe, el comprador recibirá las entradas por email.
+        {receiptMode === "preventa"
+          ? `Le enviamos un email a ${buyerEmail} con los datos de transferencia. Cuando recibas el comprobante, cargalo desde tu lista de órdenes.`
+          : "El administrador va a revisar el comprobante. Cuando se apruebe, el comprador recibirá las entradas por email."}
       </p>
 
       <div className="flex gap-3">
@@ -476,6 +541,7 @@ export default function SellerSellEventPage() {
             setBuyerName("");
             setBuyerPhone("");
             setReceipt(null);
+            setReceiptMode("now");
             setNotes("");
             setSubmitError(null);
             setStep("select");

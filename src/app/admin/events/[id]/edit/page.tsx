@@ -191,6 +191,15 @@ function InfoTab({
   );
   const [venue, setVenue] = useState(event.venue || "");
   const [status, setStatus] = useState(event.status);
+  // Transfer data
+  const [transferHolder, setTransferHolder] = useState(event.transfer_holder_name || "");
+  const [transferCbu, setTransferCbu] = useState(event.transfer_cbu || "");
+  const [transferAlias, setTransferAlias] = useState(event.transfer_alias || "");
+  const [transferBank, setTransferBank] = useState(event.transfer_bank || "");
+  const [transferIdNumber, setTransferIdNumber] = useState(event.transfer_id_number || "");
+  const [transferInstructions, setTransferInstructions] = useState(
+    event.transfer_instructions || "",
+  );
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
@@ -210,6 +219,12 @@ function InfoTab({
           event_date: new Date(eventDate).toISOString(),
           venue: venue || null,
           status,
+          transfer_holder_name: transferHolder || null,
+          transfer_cbu: transferCbu || null,
+          transfer_alias: transferAlias || null,
+          transfer_bank: transferBank || null,
+          transfer_id_number: transferIdNumber || null,
+          transfer_instructions: transferInstructions || null,
         }),
       });
       const json = await res.json();
@@ -304,6 +319,91 @@ function InfoTab({
           <option value="past">Pasado</option>
           <option value="cancelled">Cancelado</option>
         </select>
+      </div>
+
+      {/* Transfer data */}
+      <div className="rounded-xl border border-navy-100 bg-navy-50/40 p-4">
+        <h3 className="mb-1 text-sm font-bold text-navy-700">Datos para transferencia</h3>
+        <p className="mb-3 text-xs text-navy-400">
+          Estos datos se muestran al comprador y se incluyen en el email de preventa.
+        </p>
+
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-navy-700">
+              Titular de la cuenta
+            </label>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="Ej: Liceo Militar Tesorería"
+              value={transferHolder}
+              onChange={(e) => setTransferHolder(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-navy-700">CBU</label>
+              <input
+                type="text"
+                className="input-field font-mono"
+                placeholder="0000000000000000000000"
+                value={transferCbu}
+                onChange={(e) => setTransferCbu(e.target.value.replace(/\s/g, ""))}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-navy-700">Alias</label>
+              <input
+                type="text"
+                className="input-field font-mono"
+                placeholder="LICEO.MILITAR.AR"
+                value={transferAlias}
+                onChange={(e) => setTransferAlias(e.target.value.toUpperCase())}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-navy-700">
+                Banco <span className="font-normal text-navy-300">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Ej: Banco Galicia"
+                value={transferBank}
+                onChange={(e) => setTransferBank(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-navy-700">
+                CUIT/DNI <span className="font-normal text-navy-300">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                className="input-field font-mono"
+                placeholder="20-12345678-9"
+                value={transferIdNumber}
+                onChange={(e) => setTransferIdNumber(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-navy-700">
+              Instrucciones extra <span className="font-normal text-navy-300">(opcional)</span>
+            </label>
+            <textarea
+              className="input-field min-h-[60px]"
+              placeholder="Ej: Indicar en el concepto el nombre del comprador."
+              value={transferInstructions}
+              onChange={(e) => setTransferInstructions(e.target.value)}
+            />
+          </div>
+        </div>
       </div>
 
       {err && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{err}</div>}

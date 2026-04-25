@@ -89,6 +89,13 @@ export const eventSchema = z.object({
   venue: z.string().optional().nullable(),
   image_url: z.string().url().optional().nullable(),
   status: z.enum(["draft", "active", "past", "cancelled"]).default("draft"),
+  // Transfer data
+  transfer_holder_name: z.string().max(200).optional().nullable(),
+  transfer_cbu: z.string().max(40).optional().nullable(),
+  transfer_alias: z.string().max(60).optional().nullable(),
+  transfer_bank: z.string().max(100).optional().nullable(),
+  transfer_id_number: z.string().max(40).optional().nullable(),
+  transfer_instructions: z.string().max(1000).optional().nullable(),
 });
 
 // Base object schema (ZodObject — supports .partial() for PATCH/PUT)
