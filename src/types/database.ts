@@ -170,7 +170,8 @@ export interface EventTicketType {
   name: string;
   description: string | null;
   price: number;
-  quantity: number;
+  /** null = unlimited (sin cupo) */
+  quantity: number | null;
   color: string;
   sales_start_at: string | null;
   sales_end_at: string | null;

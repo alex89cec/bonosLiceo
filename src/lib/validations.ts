@@ -96,7 +96,8 @@ export const eventTicketTypeSchema = z
     name: z.string().min(1).max(100),
     description: z.string().optional().nullable(),
     price: z.number().min(0),
-    quantity: z.number().int().positive(),
+    /** null o ausente = sin cupo (ilimitado) */
+    quantity: z.number().int().positive().nullable().optional(),
     color: z.string().min(1).max(20).default("gray"),
     sales_start_at: z.string().datetime().optional().nullable(),
     sales_end_at: z.string().datetime().optional().nullable(),

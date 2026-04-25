@@ -15,7 +15,8 @@ export default function SellerSellEventPage() {
 
   const [event, setEvent] = useState<Event | null>(null);
   const [types, setTypes] = useState<EventTicketType[]>([]);
-  const [stockMap, setStockMap] = useState<Record<string, number>>({});
+  /** stockMap[id] is the remaining quantity, or null for unlimited */
+  const [stockMap, setStockMap] = useState<Record<string, number | null>>({});
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
 
@@ -55,8 +56,14 @@ export default function SellerSellEventPage() {
       setTypes(ticketTypes);
 
       // Compute remaining stock per type (valid + used + pending in orders)
-      const stockResults: Record<string, number> = {};
+      // null in the result map = unlimited
+      const stockResults: Record<string, number | null> = {};
       for (const t of ticketTypes) {
+        if (t.quantity === null) {
+          stockResults[t.id] = null; // unlimited
+          continue;
+        }
+
         const { count: takenCount } = await supabase
           .from("event_tickets")
           .select("id", { count: "exact", head: true })
@@ -91,7 +98,9 @@ export default function SellerSellEventPage() {
   }, 0);
 
   function setQty(typeId: string, q: number) {
-    const max = stockMap[typeId] ?? 0;
+    const stock = stockMap[typeId];
+    // stock null = unlimited; cap at 50 per order to avoid abuse
+    const max = stock === null ? 50 : (stock ?? 0);
     const clamped = Math.max(0, Math.min(q, max));
     setQuantities((prev) => {
       const next = { ...prev };
@@ -203,8 +212,10 @@ export default function SellerSellEventPage() {
             .filter((t) => !t.is_complimentary) // hide cortesia from seller
             .map((t) => {
               const qty = quantities[t.id] || 0;
-              const remaining = stockMap[t.id] ?? 0;
-              const soldOut = remaining === 0 && qty === 0;
+              const stock = stockMap[t.id];
+              const isUnlimited = stock === null;
+              const remaining = isUnlimited ? 50 : (stock ?? 0);
+              const soldOut = !isUnlimited && remaining === 0 && qty === 0;
 
               return (
                 <div key={t.id} className="card">
@@ -219,7 +230,11 @@ export default function SellerSellEventPage() {
                           {formatCurrency(t.price)}
                         </span>
                         <span className="ml-2 text-xs text-navy-400">
-                          {soldOut ? "Agotado" : `${remaining} disponibles`}
+                          {soldOut
+                            ? "Agotado"
+                            : isUnlimited
+                              ? "Sin cupo"
+                              : `${remaining} disponibles`}
                         </span>
                       </p>
                     </div>

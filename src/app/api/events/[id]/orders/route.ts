@@ -164,9 +164,13 @@ export async function POST(
       };
     });
 
-    // Check stock per type
+    // Check stock per type (skip if quantity is null = unlimited)
     for (const item of input.items) {
       const t = ticketTypes.find((tt) => tt.id === item.ticket_type_id)!;
+
+      // Unlimited: no stock check
+      if (t.quantity === null) continue;
+
       // Count tickets already valid/used/pending for this type
       const { count: currentlyTaken } = await service
         .from("event_tickets")

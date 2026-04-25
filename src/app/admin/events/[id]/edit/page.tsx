@@ -408,7 +408,10 @@ function TypesTab({
                       {formatCurrency(t.price)}
                     </span>
                     <span className="text-navy-400">
-                      Cupo: <strong>{t.quantity}</strong>
+                      Cupo:{" "}
+                      <strong>
+                        {t.quantity === null ? "Sin límite" : t.quantity}
+                      </strong>
                     </span>
                   </div>
                 </div>
@@ -441,7 +444,10 @@ function TicketTypeForm({
   const [name, setName] = useState(initial?.name || "");
   const [description, setDescription] = useState(initial?.description || "");
   const [price, setPrice] = useState(String(initial?.price ?? "1000"));
-  const [quantity, setQuantity] = useState(String(initial?.quantity ?? "100"));
+  const [unlimited, setUnlimited] = useState(initial?.quantity === null);
+  const [quantity, setQuantity] = useState(
+    initial?.quantity != null ? String(initial.quantity) : "100",
+  );
   const [color, setColor] = useState(initial?.color || "gray");
   const [isComplimentary, setIsComplimentary] = useState(
     initial?.is_complimentary ?? false,
@@ -457,7 +463,7 @@ function TicketTypeForm({
         name,
         description: description || null,
         price: Number(price),
-        quantity: Number(quantity),
+        quantity: unlimited ? null : Number(quantity),
         color,
         is_complimentary: isComplimentary,
       };
@@ -534,16 +540,30 @@ function TicketTypeForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-semibold text-navy-700">Cupo *</label>
+          <label className="mb-1 block text-xs font-semibold text-navy-700">
+            Cupo {unlimited ? "" : "*"}
+          </label>
           <input
             type="number"
             min="1"
-            className="input-field"
-            value={quantity}
+            className="input-field disabled:bg-gray-50 disabled:text-gray-400"
+            value={unlimited ? "" : quantity}
             onChange={(e) => setQuantity(e.target.value)}
+            disabled={unlimited}
+            placeholder={unlimited ? "Sin límite" : ""}
           />
         </div>
       </div>
+
+      <label className="flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          checked={unlimited}
+          onChange={(e) => setUnlimited(e.target.checked)}
+          className="h-4 w-4 accent-gold-500"
+        />
+        <span className="text-sm text-navy-700">Sin cupo (cantidad ilimitada)</span>
+      </label>
       <div>
         <label className="mb-1 block text-xs font-semibold text-navy-700">Color</label>
         <div className="flex flex-wrap gap-2">
