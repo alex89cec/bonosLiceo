@@ -4,25 +4,27 @@ import crypto from "crypto";
  * Signed QR token for event tickets.
  * Format: `ticketId.hmac` where hmac = HMAC-SHA256(secret, ticketId) base64url-encoded.
  *
- * The secret is `TICKET_QR_SECRET` env var (falls back to a dev-only constant).
- * In production this MUST be set to a secure random value.
+ * The secret is read from `TICKET_QR_SECRET` env var. In production it MUST be
+ * set to a secure random value; we validate lazily (only when sign/verify is
+ * actually called) so module import never throws — that way the build can
+ * still collect page data even if the env var is missing.
  */
 
-const SECRET =
-  process.env.TICKET_QR_SECRET ||
-  // dev-only fallback so local dev works; warn loudly
-  (() => {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "TICKET_QR_SECRET must be set in production",
-      );
-    }
-    return "dev-only-do-not-use-in-prod-eaf2c1d8b6";
-  })();
+const DEV_FALLBACK_SECRET = "dev-only-do-not-use-in-prod-eaf2c1d8b6";
+
+function getSecret(): string {
+  const envSecret = process.env.TICKET_QR_SECRET;
+  if (envSecret && envSecret.length > 0) return envSecret;
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("TICKET_QR_SECRET must be set in production");
+  }
+  return DEV_FALLBACK_SECRET;
+}
 
 function sign(ticketId: string): string {
   return crypto
-    .createHmac("sha256", SECRET)
+    .createHmac("sha256", getSecret())
     .update(ticketId)
     .digest("base64url");
 }
