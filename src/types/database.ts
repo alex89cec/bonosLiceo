@@ -20,6 +20,7 @@ export interface Profile {
   is_active: boolean;
   must_change_password: boolean;
   group_id: string | null;
+  is_approver: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -134,6 +135,143 @@ export interface Winner {
   position: number;
   drawn_at: string;
   drawn_by: string;
+}
+
+// ============================================================
+// EVENTS & TICKETS (separate module from raffle bonos)
+// ============================================================
+
+export type EventStatus = "draft" | "active" | "past" | "cancelled";
+export type EventTicketStatus = "valid" | "used" | "cancelled" | "refunded";
+export type ScanResult =
+  | "valid"
+  | "already_used"
+  | "invalid"
+  | "wrong_event"
+  | "cancelled";
+
+export interface Event {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  event_date: string;
+  venue: string | null;
+  image_url: string | null;
+  status: EventStatus;
+  // Transfer data (used when payment_method=transferencia)
+  transfer_holder_name: string | null;
+  transfer_cbu: string | null;
+  transfer_alias: string | null;
+  transfer_bank: string | null;
+  transfer_id_number: string | null;
+  transfer_instructions: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BundleItem {
+  ticket_type_id: string;
+  quantity: number;
+}
+
+export interface EventTicketType {
+  id: string;
+  event_id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  /** null = unlimited (sin cupo) */
+  quantity: number | null;
+  color: string;
+  sales_start_at: string | null;
+  sales_end_at: string | null;
+  is_complimentary: boolean;
+  /** When true, this type is only sold as part of a bundle (never individual). */
+  is_bundle_only: boolean;
+  /** When non-null, this type IS a bundle. Array of components. */
+  bundle_items: BundleItem[] | null;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventTicket {
+  id: string;
+  event_id: string;
+  ticket_type_id: string;
+  buyer_id: string;
+  seller_id: string | null;
+  payment_id: string | null;
+  order_id: string | null;
+  amount_paid: number | null;
+  qr_token: string;
+  status: EventTicketStatus;
+  entered_at: string | null;
+  entered_by: string | null;
+  is_complimentary: boolean;
+  /** If this ticket was generated from a bundle, the bundle type's id. */
+  parent_bundle_type_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventSeller {
+  id: string;
+  event_id: string;
+  seller_id: string;
+  can_sell: boolean;
+  can_scan: boolean;
+  assigned_at: string;
+}
+
+export interface EventScanLog {
+  id: string;
+  event_ticket_id: string | null;
+  event_id: string | null;
+  scanned_by: string | null;
+  scanned_at: string;
+  result: ScanResult;
+  metadata: Record<string, unknown> | null;
+}
+
+export type EventOrderStatus =
+  | "awaiting_receipt"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "complimentary";
+
+export type EventPaymentMethod = "transferencia" | "cortesia";
+
+export interface EventOrderItem {
+  ticket_type_id: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+}
+
+export interface EventOrder {
+  id: string;
+  event_id: string;
+  buyer_id: string;
+  seller_id: string | null;
+  items: EventOrderItem[];
+  total_amount: number;
+  payment_method: EventPaymentMethod;
+  receipt_url: string | null;
+  receipt_filename: string | null;
+  receipt_mime_type: string | null;
+  receipt_uploaded_at: string | null;
+  status: EventOrderStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // RPC response types

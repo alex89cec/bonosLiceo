@@ -73,8 +73,88 @@ export const groupSchema = z.object({
   color: z.string().min(1).max(20).optional().default("blue"),
 });
 
+// ============================================================
+// Events (tickets module)
+// ============================================================
+
+export const eventSchema = z.object({
+  name: z.string().min(1).max(200),
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[a-z0-9-]+$/, "Solo letras, números y guiones"),
+  description: z.string().optional().nullable(),
+  event_date: z.string().datetime(),
+  venue: z.string().optional().nullable(),
+  image_url: z.string().url().optional().nullable(),
+  status: z.enum(["draft", "active", "past", "cancelled"]).default("draft"),
+  // Transfer data
+  transfer_holder_name: z.string().max(200).optional().nullable(),
+  transfer_cbu: z.string().max(40).optional().nullable(),
+  transfer_alias: z.string().max(60).optional().nullable(),
+  transfer_bank: z.string().max(100).optional().nullable(),
+  transfer_id_number: z.string().max(40).optional().nullable(),
+  transfer_instructions: z.string().max(1000).optional().nullable(),
+});
+
+// Bundle component
+export const bundleItemSchema = z.object({
+  ticket_type_id: z.string().uuid(),
+  quantity: z.number().int().positive().max(20),
+});
+
+// Base object schema (ZodObject — supports .partial() for PATCH/PUT)
+export const eventTicketTypeBaseSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().optional().nullable(),
+  price: z.number().min(0),
+  /** null o ausente = sin cupo (ilimitado) */
+  quantity: z.number().int().positive().nullable().optional(),
+  color: z.string().min(1).max(20).default("gray"),
+  sales_start_at: z.string().datetime().optional().nullable(),
+  sales_end_at: z.string().datetime().optional().nullable(),
+  is_complimentary: z.boolean().default(false),
+  display_order: z.number().int().default(0),
+  /** Solo se vende dentro de bundles */
+  is_bundle_only: z.boolean().default(false),
+  /** Si está definido, este type es un bundle */
+  bundle_items: z.array(bundleItemSchema).min(1).optional().nullable(),
+});
+
+// Full schema with cross-field validation, used for creates
+export const eventTicketTypeSchema = eventTicketTypeBaseSchema
+  .refine(
+    (data) => {
+      if (data.sales_start_at && data.sales_end_at) {
+        return new Date(data.sales_end_at) > new Date(data.sales_start_at);
+      }
+      return true;
+    },
+    {
+      message: "La fecha de fin de ventas debe ser posterior al inicio",
+      path: ["sales_end_at"],
+    },
+  )
+  .refine(
+    (data) => !(data.is_bundle_only === true && data.bundle_items),
+    {
+      message: "Un type no puede ser bundle y solo-en-bundles a la vez",
+      path: ["bundle_items"],
+    },
+  );
+
+export const eventSellerAssignmentSchema = z.object({
+  seller_id: z.string().uuid(),
+  can_sell: z.boolean().default(true),
+  can_scan: z.boolean().default(false),
+});
+
 export type ReserveTicketInput = z.infer<typeof reserveTicketSchema>;
 export type ReserveBatchInput = z.infer<typeof reserveBatchSchema>;
 export type CampaignInput = z.infer<typeof campaignSchema>;
 export type SorteoInput = z.infer<typeof sorteoSchema>;
 export type GroupInput = z.infer<typeof groupSchema>;
+export type EventInput = z.infer<typeof eventSchema>;
+export type EventTicketTypeInput = z.infer<typeof eventTicketTypeSchema>;
+export type EventSellerAssignmentInput = z.infer<typeof eventSellerAssignmentSchema>;

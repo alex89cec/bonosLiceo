@@ -99,6 +99,34 @@ export default async function SellerDashboardPage() {
         .filter(Boolean) || [];
   }
 
+  // Get assigned events (with can_sell=true)
+  const { data: eventAssignments } = await supabase
+    .from("event_sellers")
+    .select(
+      `
+      can_sell,
+      can_scan,
+      events:event_id (id, name, slug, status, event_date, venue)
+    `,
+    )
+    .eq("seller_id", user.id);
+
+  const eventList = (eventAssignments || [])
+    .filter((a) => a.can_sell || a.can_scan)
+    .map((a) => ({
+      ...(a.events as unknown as {
+        id: string;
+        name: string;
+        slug: string;
+        status: string;
+        event_date: string;
+        venue: string | null;
+      }),
+      can_sell: a.can_sell,
+      can_scan: a.can_scan,
+    }))
+    .filter((e) => e && e.id && (e.status === "active" || e.status === "draft"));
+
   // Get recent reservations with full details — only from active campaigns
   const { data: reservations } = await supabase
     .from("reservations")
@@ -262,6 +290,48 @@ export default async function SellerDashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Events */}
+      {eventList.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-navy-400">
+            Mis eventos
+          </h2>
+          <div className="space-y-2">
+            {eventList.map((event) => (
+              <a
+                key={event.id}
+                href={event.can_sell ? `/seller/events/${event.slug}/sell` : "#"}
+                className="card flex items-center justify-between transition-all hover:border-gold-400 hover:bg-gold-50"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-navy-700">{event.name}</p>
+                  <p className="text-xs text-navy-400">
+                    {new Date(event.event_date).toLocaleDateString("es-AR", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                    {event.venue && <span> • {event.venue}</span>}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  {event.can_sell && (
+                    <span className="rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold text-gold-800">
+                      Vender
+                    </span>
+                  )}
+                  {event.can_scan && (
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-800">
+                      Escanear
+                    </span>
+                  )}
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent reservations — grouped by buyer */}
       <div>
