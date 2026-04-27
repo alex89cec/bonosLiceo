@@ -28,6 +28,7 @@ export default function SellerDetailPage() {
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [isApprover, setIsApprover] = useState(false);
   const [campaigns, setCampaigns] = useState<CampaignEntry[]>([]);
 
   const [sellerRole, setSellerRole] = useState<string>("seller");
@@ -71,6 +72,7 @@ export default function SellerDetailPage() {
         setFullName(s.full_name);
         setEmail(s.email);
         setIsActive(s.is_active);
+        setIsApprover(s.is_approver === true);
         setSellerRole(s.role);
         setSellerCode(s.seller_code || "");
         setGroupId(s.group_id || null);
@@ -227,6 +229,7 @@ export default function SellerDetailPage() {
       full_name: fullName.trim(),
       email: email.trim(),
       is_active: isActive,
+      is_approver: isApprover,
     };
     if (newPassword) body.new_password = newPassword;
     body.group_id = groupId;
@@ -443,6 +446,43 @@ export default function SellerDetailPage() {
                 <span className="slider" />
               </span>
             </label>
+
+            {/* Validator role toggle */}
+            {(() => {
+              const isPrincipalAdmin = email === "admin@rifasliceo.com";
+              return (
+                <label
+                  className={`flex items-center justify-between border-t border-navy-100 pt-4 ${
+                    isPrincipalAdmin ? "" : "cursor-pointer"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1 pr-3">
+                    <p className="text-sm font-semibold text-navy-700">
+                      Validador
+                    </p>
+                    <p className="text-xs text-navy-400">
+                      Puede aprobar/rechazar órdenes de eventos en{" "}
+                      <span className="font-mono">/admin/orders</span>
+                      {isPrincipalAdmin && (
+                        <span className="block text-amber-600">
+                          (Admin Principal — no se puede desasignar)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <span className="toggle-slider">
+                    <input
+                      className="sr-only"
+                      type="checkbox"
+                      checked={isApprover}
+                      onChange={(e) => setIsApprover(e.target.checked)}
+                      disabled={isPrincipalAdmin}
+                    />
+                    <span className="slider" />
+                  </span>
+                </label>
+              );
+            })()}
           </div>
         </div>
 

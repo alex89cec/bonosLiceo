@@ -146,6 +146,11 @@ export default function SellersList({ profiles }: SellersListProps) {
                         Inactivo
                       </span>
                     )}
+                    {profile.is_approver && (
+                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                        Validador
+                      </span>
+                    )}
                     {profile.seller_group && (() => {
                       const gc = getGroupColor(profile.seller_group.color);
                       return (
