@@ -29,14 +29,34 @@ export default async function PublicEventPage({ params, searchParams }: Props) {
 
   const ev = event as Event;
 
-  // Resolve initial seller (from ?seller=XXX) — only attribute if assigned with can_sell
+  // Resolve initial seller (from ?seller=XXX). We try the CURRENT seller_code
+  // first; if not found, we fall back to historical codes so links shared
+  // with previously-used codes still attribute.
   let initialSeller: { code: string; name: string } | null = null;
   if (sellerCodeParam) {
-    const { data: sellerProfile } = await supabase
+    let sellerProfile: {
+      id: string;
+      full_name: string;
+      seller_code: string | null;
+      is_active: boolean;
+    } | null = null;
+
+    const { data: byCurrent } = await supabase
       .from("profiles")
       .select("id, full_name, seller_code, is_active")
       .eq("seller_code", sellerCodeParam)
-      .single();
+      .maybeSingle();
+
+    if (byCurrent) {
+      sellerProfile = byCurrent;
+    } else {
+      const { data: byHistory } = await supabase
+        .from("profiles")
+        .select("id, full_name, seller_code, is_active")
+        .contains("seller_code_history", [sellerCodeParam])
+        .maybeSingle();
+      if (byHistory) sellerProfile = byHistory;
+    }
 
     if (sellerProfile?.is_active) {
       const { data: assignment } = await supabase

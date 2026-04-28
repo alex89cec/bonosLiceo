@@ -150,6 +150,27 @@ export const eventSellerAssignmentSchema = z.object({
   can_scan: z.boolean().default(false),
 });
 
+// ============================================================
+// Profile (self-service)
+// ============================================================
+
+export const sellerCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(
+    /^[A-Z0-9.-]{4,12}$/,
+    "El código debe tener 4-12 caracteres: letras, números, puntos o guiones",
+  );
+
+export const profileUpdateSchema = z.object({
+  full_name: z.string().min(1).max(200).optional(),
+  phone: z.string().max(50).optional().nullable(),
+  seller_code: sellerCodeSchema.optional(),
+});
+
+export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
+
 export type ReserveTicketInput = z.infer<typeof reserveTicketSchema>;
 export type ReserveBatchInput = z.infer<typeof reserveBatchSchema>;
 export type CampaignInput = z.infer<typeof campaignSchema>;
