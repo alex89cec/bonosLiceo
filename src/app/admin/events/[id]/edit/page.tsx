@@ -204,6 +204,65 @@ function InfoTab({
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
 
+  // Cover image
+  const [imageUrl, setImageUrl] = useState<string | null>(event.image_url);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  async function uploadImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError("El archivo supera 5MB");
+      e.target.value = "";
+      return;
+    }
+
+    setImageUploading(true);
+    setImageError(null);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch(`/api/events/${event.id}/image`, {
+        method: "POST",
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setImageError(json.error || "Error al subir la imagen");
+      } else {
+        setImageUrl(json.image_url);
+        onUpdate();
+      }
+    } catch {
+      setImageError("Error de red");
+    }
+    setImageUploading(false);
+    e.target.value = "";
+  }
+
+  async function removeImage() {
+    if (!confirm("¿Eliminar la portada del evento?")) return;
+    setImageUploading(true);
+    setImageError(null);
+    try {
+      const res = await fetch(`/api/events/${event.id}/image`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setImageError(json.error || "Error al eliminar");
+      } else {
+        setImageUrl(null);
+        onUpdate();
+      }
+    } catch {
+      setImageError("Error de red");
+    }
+    setImageUploading(false);
+  }
+
   async function save() {
     setSaving(true);
     setErr(null);
@@ -340,6 +399,78 @@ function InfoTab({
           value={slug}
           onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, "-"))}
         />
+      </div>
+
+      {/* Cover image */}
+      <div>
+        <label className="mb-1.5 block text-sm font-semibold text-navy-700">
+          Portada del evento
+        </label>
+        {imageUrl ? (
+          <div className="space-y-2">
+            <div className="aspect-video w-full overflow-hidden rounded-xl border border-navy-100 bg-navy-50">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imageUrl}
+                alt="Portada"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <label className="cursor-pointer rounded-xl border border-navy-200 bg-white px-3 py-1.5 text-xs font-medium text-navy-700 transition hover:bg-navy-50">
+                {imageUploading ? "Subiendo..." : "Reemplazar"}
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={uploadImage}
+                  disabled={imageUploading}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={removeImage}
+                disabled={imageUploading}
+                className="rounded-xl border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-navy-200 bg-navy-50/30 p-6 text-center transition hover:border-gold-400 hover:bg-gold-50">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-8 w-8 text-navy-300"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <p className="text-sm font-medium text-navy-600">
+              {imageUploading ? "Subiendo..." : "Subir portada"}
+            </p>
+            <p className="text-xs text-navy-400">
+              JPEG, PNG o WebP — máx 5MB · proporción 16:9 recomendada
+            </p>
+            <input
+              type="file"
+              className="hidden"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={uploadImage}
+              disabled={imageUploading}
+            />
+          </label>
+        )}
+        {imageError && (
+          <p className="mt-2 text-xs text-red-600">{imageError}</p>
+        )}
       </div>
 
       <div>
