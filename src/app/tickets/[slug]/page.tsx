@@ -131,7 +131,7 @@ export default async function PublicEventPage({ params, searchParams }: Props) {
           <Link href="/tickets" className="text-xs text-gold-400 hover:underline">
             ← Volver a eventos
           </Link>
-          <h1 className="text-sm font-bold text-gold-400">Bonos Contribución</h1>
+          <h1 className="text-sm font-bold text-gold-400">Eventos Gira</h1>
         </div>
       </header>
 
