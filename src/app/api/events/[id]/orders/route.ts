@@ -374,11 +374,22 @@ export async function POST(
     if (role === "seller") {
       resolvedSellerId = user!.id;
     } else if (role === "public" && input.seller_code) {
-      const { data: sellerProfile } = await service
+      // Look up by CURRENT seller_code first; fall back to historical
+      // codes so links shared with previous codes still attribute.
+      let { data: sellerProfile } = await service
         .from("profiles")
         .select("id, is_active")
         .eq("seller_code", input.seller_code)
-        .single();
+        .maybeSingle();
+
+      if (!sellerProfile) {
+        const { data: historicalProfile } = await service
+          .from("profiles")
+          .select("id, is_active")
+          .contains("seller_code_history", [input.seller_code])
+          .maybeSingle();
+        if (historicalProfile) sellerProfile = historicalProfile;
+      }
 
       if (sellerProfile && sellerProfile.is_active) {
         const { data: assignment } = await service

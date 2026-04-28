@@ -77,8 +77,9 @@ export default function ProfilePage() {
     if (sellerCode !== originalCode) {
       const ok = confirm(
         `Vas a cambiar tu código de "${originalCode}" a "${sellerCode}".\n\n` +
-          `⚠️ Los links de venta que ya compartiste con tu código anterior dejarán de atribuirte ventas.\n\n` +
-          `Las ventas que YA hiciste se mantienen — solo afecta a links nuevos que envíen compradores con el código viejo.\n\n` +
+          `Tus ventas anteriores siguen atadas a tu cuenta, y los links que ` +
+          `compartiste con "${originalCode}" se siguen atribuyendo a vos.\n\n` +
+          `El código viejo queda reservado para que nadie más lo use.\n\n` +
           `¿Continuar?`,
       );
       if (!ok) return;
@@ -246,10 +247,10 @@ export default function ProfilePage() {
               4-12 caracteres: letras (A-Z), números, puntos o guiones.
             </p>
             {codeChanged && (
-              <div className="mt-2 rounded-xl bg-amber-50 p-2 text-xs text-amber-800">
-                ⚠️ Si cambiás tu código, los links que compartiste antes dejan
-                de atribuir ventas a tu cuenta. Las ventas YA hechas no se
-                pierden.
+              <div className="mt-2 rounded-xl bg-blue-50 p-2 text-xs text-blue-800">
+                ✅ Tus ventas anteriores siguen atadas a tu cuenta y los links
+                con tu código viejo se van a seguir atribuyendo a vos. El
+                código anterior queda reservado para que nadie más lo use.
               </div>
             )}
             {sellerCode && !codeIsValid && (

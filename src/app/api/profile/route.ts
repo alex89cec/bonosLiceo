@@ -72,19 +72,54 @@ export async function PUT(request: Request) {
     // profile via RLS, so we need to bypass to check seller_code globally).
     const service = createServiceRoleClient();
 
-    if (updates.seller_code !== undefined) {
-      const { data: clash } = await service
-        .from("profiles")
-        .select("id")
-        .eq("seller_code", updates.seller_code)
-        .neq("id", user.id)
-        .maybeSingle();
+    // Fetch current profile so we can compute history changes
+    const { data: currentProfile } = await service
+      .from("profiles")
+      .select("seller_code, seller_code_history")
+      .eq("id", user.id)
+      .single();
 
-      if (clash) {
-        return NextResponse.json(
-          { error: "Ese código ya está en uso por otro usuario" },
-          { status: 409 },
-        );
+    if (updates.seller_code !== undefined && currentProfile) {
+      const newCode = updates.seller_code;
+      const currentCode = currentProfile.seller_code;
+      const currentHistory: string[] =
+        (currentProfile.seller_code_history as string[] | null) || [];
+
+      // No-op if same code
+      if (newCode !== currentCode) {
+        // Reject if the new code matches another user's CURRENT code
+        const { data: currentClash } = await service
+          .from("profiles")
+          .select("id")
+          .eq("seller_code", newCode)
+          .neq("id", user.id)
+          .maybeSingle();
+
+        if (currentClash) {
+          return NextResponse.json(
+            { error: "Ese código ya está en uso por otro usuario" },
+            { status: 409 },
+          );
+        }
+
+        // Reject if the new code is in another user's HISTORY
+        // (so we don't clash with an old share link of theirs)
+        const { data: historyClash } = await service
+          .from("profiles")
+          .select("id")
+          .contains("seller_code_history", [newCode])
+          .neq("id", user.id)
+          .maybeSingle();
+
+        if (historyClash) {
+          return NextResponse.json(
+            {
+              error:
+                "Ese código fue usado antes por otro usuario. Elegí otro distinto.",
+            },
+            { status: 409 },
+          );
+        }
       }
     }
 
@@ -93,8 +128,28 @@ export async function PUT(request: Request) {
       writableUpdates.full_name = updates.full_name.trim();
     if (updates.phone !== undefined)
       writableUpdates.phone = updates.phone?.trim() || null;
-    if (updates.seller_code !== undefined)
-      writableUpdates.seller_code = updates.seller_code;
+
+    // Handle seller_code change: push old code to history (de-duped)
+    if (updates.seller_code !== undefined && currentProfile) {
+      const newCode = updates.seller_code;
+      const currentCode = currentProfile.seller_code;
+      if (newCode !== currentCode) {
+        writableUpdates.seller_code = newCode;
+
+        const existingHistory: string[] =
+          (currentProfile.seller_code_history as string[] | null) || [];
+        const additions: string[] = [];
+        // Add the previous current code (if any) if not already in history
+        if (currentCode && !existingHistory.includes(currentCode)) {
+          additions.push(currentCode);
+        }
+        // Remove the new code from history if it was there (since it's now current)
+        const newHistory = existingHistory
+          .filter((c) => c !== newCode)
+          .concat(additions);
+        writableUpdates.seller_code_history = newHistory;
+      }
+    }
 
     if (Object.keys(writableUpdates).length === 0) {
       return NextResponse.json({ error: "Nada para actualizar" }, { status: 400 });
