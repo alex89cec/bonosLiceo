@@ -148,18 +148,30 @@ export default function AdminNav({
           })}
         </div>
 
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          disabled={loggingOut}
-          title="Salir"
-          className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-navy-400 transition-colors hover:bg-red-50 hover:text-red-500"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          <span className="hidden sm:inline">{loggingOut ? "..." : "Salir"}</span>
-        </button>
+        {/* Profile + Logout */}
+        <div className="flex items-center gap-1">
+          <a
+            href="/seller/profile"
+            title="Mi perfil"
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-navy-400 transition-colors hover:bg-navy-50 hover:text-navy-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <span className="hidden sm:inline">Perfil</span>
+          </a>
+          <button
+            onClick={handleLogout}
+            disabled={loggingOut}
+            title="Salir"
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-sm font-medium text-navy-400 transition-colors hover:bg-red-50 hover:text-red-500"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span className="hidden sm:inline">{loggingOut ? "..." : "Salir"}</span>
+          </button>
+        </div>
       </div>
     </nav>
   );
