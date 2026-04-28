@@ -14,11 +14,15 @@ export async function GET(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, is_approver")
+      .select("role, is_active, is_approver")
       .eq("id", user.id)
       .single();
 
-    if (!profile || profile.role !== "admin") {
+    // Admins always allowed; sellers only if they have is_approver
+    const allowed =
+      profile?.is_active &&
+      (profile.role === "admin" || profile.is_approver === true);
+    if (!profile || !allowed) {
       return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
     }
 

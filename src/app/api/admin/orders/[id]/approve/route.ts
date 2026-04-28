@@ -26,13 +26,13 @@ export async function POST(
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, is_approver")
+      .select("role, is_active, is_approver")
       .eq("id", user.id)
       .single();
 
-    if (!profile || profile.role !== "admin" || !profile.is_approver) {
+    if (!profile || !profile.is_active || !profile.is_approver) {
       return NextResponse.json(
-        { error: "Solo aprobadores pueden aprobar órdenes" },
+        { error: "Solo validadores pueden aprobar órdenes" },
         { status: 403 },
       );
     }

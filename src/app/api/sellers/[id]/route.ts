@@ -30,6 +30,7 @@ const updateSellerSchema = z.object({
     .optional(),
   new_password: z.string().min(8).optional(),
   is_active: z.boolean().optional(),
+  is_approver: z.boolean().optional(),
   group_id: z.string().uuid().nullable().optional(),
   campaigns: z
     .array(
@@ -41,6 +42,9 @@ const updateSellerSchema = z.object({
     )
     .optional(),
 });
+
+// Email of the principal admin — protected from is_approver removal
+const PRINCIPAL_ADMIN_EMAIL = "admin@rifasliceo.com";
 
 // GET /api/sellers/[id] — fetch seller details + campaign assignments
 export async function GET(
@@ -229,16 +233,43 @@ export async function PUT(
       );
     }
 
-    const { full_name, email, new_password, is_active, group_id, campaigns } =
-      parsed.data;
+    const {
+      full_name,
+      email,
+      new_password,
+      is_active,
+      is_approver,
+      group_id,
+      campaigns,
+    } = parsed.data;
 
     const serviceClient = createServiceRoleClient();
+
+    // Guardrail: protect Admin Principal from having is_approver removed
+    if (is_approver === false) {
+      const { data: target } = await serviceClient
+        .from("profiles")
+        .select("email")
+        .eq("id", id)
+        .single();
+
+      if (target?.email === PRINCIPAL_ADMIN_EMAIL) {
+        return NextResponse.json(
+          {
+            error:
+              "No se puede quitar el rol de validador al Admin Principal",
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     // 1. Update profile fields
     const profileUpdate: Record<string, unknown> = {};
     if (full_name !== undefined) profileUpdate.full_name = full_name;
     if (email !== undefined) profileUpdate.email = email;
     if (is_active !== undefined) profileUpdate.is_active = is_active;
+    if (is_approver !== undefined) profileUpdate.is_approver = is_approver;
     if (group_id !== undefined) profileUpdate.group_id = group_id;
 
     if (Object.keys(profileUpdate).length > 0) {

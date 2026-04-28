@@ -241,13 +241,77 @@ function InfoTab({
     setSaving(false);
   }
 
-  async function remove() {
-    if (!confirm("¿Eliminar este evento? No se puede deshacer.")) return;
+  async function markAsPast() {
+    if (!confirm("¿Marcar este evento como terminado? Se mantienen las entradas vendidas pero no se podrá vender más.")) {
+      return;
+    }
+    setSaving(true);
+    setErr(null);
     try {
-      const res = await fetch(`/api/events/${event.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/events/${event.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "past" }),
+      });
       const json = await res.json();
       if (!res.ok) {
-        setErr(json.error || "Error al eliminar");
+        setErr(json.error || "Error al actualizar");
+      } else {
+        setStatus("past");
+        onUpdate();
+      }
+    } catch {
+      setErr("Error de red");
+    }
+    setSaving(false);
+  }
+
+  async function remove() {
+    setErr(null);
+    try {
+      // First attempt: regular delete
+      const res = await fetch(`/api/events/${event.id}`, { method: "DELETE" });
+      const json = await res.json();
+
+      if (res.ok) {
+        onDelete();
+        return;
+      }
+
+      // 409 with ticket/order counts → ask for force confirmation
+      if (res.status === 409 && (json.ticket_count > 0 || json.order_count > 0)) {
+        const t = json.ticket_count || 0;
+        const o = json.order_count || 0;
+        const msg =
+          `Este evento tiene ${t} entrada${t === 1 ? "" : "s"} y ${o} orden${o === 1 ? "" : "es"} asociada${o === 1 ? "" : "s"}.\n\n` +
+          `Si lo eliminás definitivamente se borran también:\n` +
+          `• ${t} entradas con sus QRs\n` +
+          `• ${o} órdenes\n` +
+          `• Todos los comprobantes (PDFs/imágenes)\n` +
+          `• Logs de escaneos\n\n` +
+          `Si solo querés cerrarlo (sin perder histórico), usá "Marcar como terminado".\n\n` +
+          `¿Eliminar definitivamente y de manera irreversible?`;
+
+        if (!confirm(msg)) return;
+
+        const res2 = await fetch(`/api/events/${event.id}?force=true`, {
+          method: "DELETE",
+        });
+        const json2 = await res2.json();
+        if (!res2.ok) {
+          setErr(json2.error || "Error al eliminar");
+          return;
+        }
+        onDelete();
+        return;
+      }
+
+      // No data — single confirm
+      if (!confirm("¿Eliminar este evento? No se puede deshacer.")) return;
+      const res2 = await fetch(`/api/events/${event.id}`, { method: "DELETE" });
+      const json2 = await res2.json();
+      if (!res2.ok) {
+        setErr(json2.error || "Error al eliminar");
       } else {
         onDelete();
       }
@@ -413,13 +477,24 @@ function InfoTab({
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button className="btn-gold flex-1" onClick={save} disabled={saving}>
           {saving ? "Guardando..." : "Guardar"}
         </button>
+        {event.status !== "past" && event.status !== "cancelled" && (
+          <button
+            className="rounded-xl border border-navy-200 bg-white px-4 py-2 text-sm font-medium text-navy-600 transition hover:bg-navy-50"
+            onClick={markAsPast}
+            disabled={saving}
+            title="Cambia el estado a 'Pasado' sin borrar las entradas vendidas"
+          >
+            Marcar como terminado
+          </button>
+        )}
         <button
           className="rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
           onClick={remove}
+          disabled={saving}
         >
           Eliminar
         </button>
