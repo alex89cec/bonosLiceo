@@ -206,10 +206,13 @@ function OrderCard({
   }
 
   async function resendEmail() {
+    // Uses /regenerate (idempotent): if tickets missing it generates them
+    // and sends; if they exist, just resends the email. Recovers from
+    // approval-time failures (e.g., missing TICKET_QR_SECRET).
     setActionLoading("resend");
     setActionError(null);
     try {
-      const res = await fetch(`/api/admin/orders/${order.id}/resend-email`, {
+      const res = await fetch(`/api/admin/orders/${order.id}/regenerate`, {
         method: "POST",
       });
       const json = await res.json();
@@ -217,9 +220,9 @@ function OrderCard({
         setActionError(json.error || "Error al reenviar email");
       } else {
         setActionError(null);
-        // Show ephemeral feedback
         setActionLoading("resent");
         setTimeout(() => setActionLoading(null), 1500);
+        onAction();
         return;
       }
     } catch {

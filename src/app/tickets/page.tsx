@@ -18,7 +18,7 @@ export default async function PublicTicketsPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-navy-700 px-4 py-4 text-center">
-        <h1 className="text-lg font-bold text-gold-400">Bonos Contribución</h1>
+        <h1 className="text-lg font-bold text-gold-400">Eventos Gira</h1>
         <p className="text-xs text-navy-200">Compra tus entradas</p>
       </header>
 
