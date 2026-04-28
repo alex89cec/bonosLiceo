@@ -39,16 +39,13 @@ export async function POST(
       .eq("id", user.id)
       .single();
 
-    if (!profile || !profile.is_active || profile.role !== "admin") {
-      return NextResponse.json(
-        { error: "Solo admins pueden regenerar entradas" },
-        { status: 403 },
-      );
+    if (!profile || !profile.is_active) {
+      return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
     }
 
     const { data: order, error: orderErr } = await service
       .from("event_orders")
-      .select("id, status")
+      .select("id, status, seller_id")
       .eq("id", id)
       .single();
 
@@ -56,6 +53,20 @@ export async function POST(
       return NextResponse.json(
         { error: "Orden no encontrada" },
         { status: 404 },
+      );
+    }
+
+    // Authorization: admins anywhere; sellers only on their own orders
+    const isAdmin = profile.role === "admin";
+    const isOwnSeller =
+      profile.role === "seller" && order.seller_id === user.id;
+    if (!isAdmin && !isOwnSeller) {
+      return NextResponse.json(
+        {
+          error:
+            "Solo el vendedor de la orden o un admin pueden regenerar entradas",
+        },
+        { status: 403 },
       );
     }
 
