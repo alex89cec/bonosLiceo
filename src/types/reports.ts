@@ -221,3 +221,26 @@ export interface EventsSellerReport {
   total_amount_collected: number;
   events: EventsSellerEventBreakdown[];
 }
+
+export interface EventTicketDetailRow {
+  id: string;
+  short_id: string; // first 6 chars of ID for display
+  event_id: string;
+  event_name: string;
+  ticket_type_id: string;
+  ticket_type_name: string;
+  ticket_type_color: string | null;
+  parent_bundle_type_name: string | null;
+  buyer_id: string;
+  buyer_name: string | null;
+  buyer_email: string;
+  seller_id: string | null;
+  seller_name: string | null;
+  seller_code: string | null;
+  order_id: string | null;
+  amount_paid: number | null;
+  status: string; // valid | used | cancelled | refunded
+  is_complimentary: boolean;
+  entered_at: string | null;
+  created_at: string;
+}

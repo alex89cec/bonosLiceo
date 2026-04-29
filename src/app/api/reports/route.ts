@@ -18,6 +18,7 @@ import type {
   EventOrderItem,
   EventsSellerReport,
   EventsSellerEventBreakdown,
+  EventTicketDetailRow,
 } from "@/types/reports";
 
 export async function GET(request: NextRequest) {
@@ -626,20 +627,19 @@ export async function GET(request: NextRequest) {
     // unless you specifically ask).
 
     if (tab.startsWith("events-")) {
-      const eventStatus =
-        statusFilter === "all"
-          ? null // means: active + past (NOT cancelled)
-          : statusFilter; // specific status
-
-      // Fetch events
+      // Fetch events filtered by status:
+      // - "all" → everything except `past` (mirrors how Bonos hides closed)
+      // - specific status → only that status
       let eventsQuery = supabase
         .from("events")
         .select("id, name, slug, status, event_date, venue");
-      if (eventStatus) {
-        eventsQuery = eventsQuery.eq("status", eventStatus);
+
+      if (statusFilter === "all") {
+        eventsQuery = eventsQuery.neq("status", "past");
       } else {
-        eventsQuery = eventsQuery.in("status", ["active", "past"]);
+        eventsQuery = eventsQuery.eq("status", statusFilter);
       }
+
       const { data: events } = await eventsQuery.order("event_date", {
         ascending: false,
       });
@@ -965,6 +965,66 @@ export async function GET(request: NextRequest) {
           (a, b) => b.total_amount_collected - a.total_amount_collected,
         );
         return NextResponse.json(result);
+      }
+
+      // events-detail — flat list of every event_ticket with editable email
+      if (tab === "events-detail") {
+        // Fetch tickets in scope
+        const { data: ticketsRaw } = await supabase
+          .from("event_tickets")
+          .select(
+            "id, event_id, ticket_type_id, parent_bundle_type_id, buyer_id, seller_id, order_id, amount_paid, status, is_complimentary, entered_at, created_at",
+          )
+          .in("event_id", Array.from(eventIdsForReport))
+          .order("created_at", { ascending: false });
+
+        const ticketsAll = ticketsRaw || [];
+        const eventNameById = new Map(
+          eventsList.map((e) => [e.id as string, e.name as string]),
+        );
+        const typeById = new Map(
+          types.map((t) => [
+            t.id as string,
+            { name: t.name as string, color: (t.color as string) || "gray" },
+          ]),
+        );
+
+        const rows: EventTicketDetailRow[] = ticketsAll.map((t) => {
+          const buyer = buyersMapEv.get(t.buyer_id as string);
+          const seller = t.seller_id
+            ? profilesMapEv.get(t.seller_id as string)
+            : null;
+          const type = typeById.get(t.ticket_type_id as string);
+          const parentBundle = t.parent_bundle_type_id
+            ? typeById.get(t.parent_bundle_type_id as string)
+            : null;
+          const id = t.id as string;
+          return {
+            id,
+            short_id: id.slice(0, 8).toUpperCase(),
+            event_id: t.event_id as string,
+            event_name: eventNameById.get(t.event_id as string) || "—",
+            ticket_type_id: t.ticket_type_id as string,
+            ticket_type_name: type?.name || "—",
+            ticket_type_color: type?.color || null,
+            parent_bundle_type_name: parentBundle?.name || null,
+            buyer_id: t.buyer_id as string,
+            buyer_name: buyer?.full_name || null,
+            buyer_email: buyer?.email || "—",
+            seller_id: (t.seller_id as string) || null,
+            seller_name: seller?.full_name || null,
+            seller_code: seller?.seller_code || null,
+            order_id: (t.order_id as string) || null,
+            amount_paid:
+              t.amount_paid !== null ? Number(t.amount_paid) : null,
+            status: t.status as string,
+            is_complimentary: Boolean(t.is_complimentary),
+            entered_at: (t.entered_at as string) || null,
+            created_at: t.created_at as string,
+          };
+        });
+
+        return NextResponse.json(rows);
       }
     }
 

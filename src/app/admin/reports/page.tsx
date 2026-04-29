@@ -10,6 +10,7 @@ import EventsSummaryTab from "@/components/reports/EventsSummaryTab";
 import EventsListTab from "@/components/reports/EventsListTab";
 import EventsOrdersTab from "@/components/reports/EventsOrdersTab";
 import EventsSellersTab from "@/components/reports/EventsSellersTab";
+import EventsDetailTab from "@/components/reports/EventsDetailTab";
 import type {
   SummaryReport,
   CampaignReport,
@@ -20,6 +21,7 @@ import type {
   EventReportRow,
   EventOrderRow,
   EventsSellerReport,
+  EventTicketDetailRow,
 } from "@/types/reports";
 
 // ────────────────────────────────────────────────────────────
@@ -40,6 +42,7 @@ const EVENTOS_TABS = [
   { key: "events-list", label: "Eventos" },
   { key: "events-orders", label: "Órdenes" },
   { key: "events-sellers", label: "Vendedores" },
+  { key: "events-detail", label: "Detalle" },
 ] as const;
 
 type TabKey =
@@ -96,6 +99,9 @@ export default function ReportsPage() {
   const [eventsSellers, setEventsSellers] = useState<
     EventsSellerReport[] | null
   >(null);
+  const [eventsDetail, setEventsDetail] = useState<
+    EventTicketDetailRow[] | null
+  >(null);
 
   // Detect admin role for inline-edit permission (single check on mount)
   useEffect(() => {
@@ -151,6 +157,9 @@ export default function ReportsPage() {
           case "events-sellers":
             setEventsSellers(data);
             break;
+          case "events-detail":
+            setEventsDetail(data);
+            break;
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error de conexión");
@@ -202,6 +211,9 @@ export default function ReportsPage() {
         break;
       case "events-sellers":
         setEventsSellers(null);
+        break;
+      case "events-detail":
+        setEventsDetail(null);
         break;
     }
   }
@@ -314,6 +326,9 @@ export default function ReportsPage() {
           )}
           {activeTab === "events-sellers" && eventsSellers && (
             <EventsSellersTab data={eventsSellers} />
+          )}
+          {activeTab === "events-detail" && eventsDetail && (
+            <EventsDetailTab data={eventsDetail} isAdmin={isAdmin} />
           )}
         </>
       )}
