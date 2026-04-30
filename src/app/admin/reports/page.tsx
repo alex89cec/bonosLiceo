@@ -258,38 +258,69 @@ export default function ReportsPage() {
         ))}
       </div>
 
-      {/* Sub-tabs */}
-      <div className="flex flex-wrap gap-2">
-        {subTabs.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => switchTab(key as TabKey)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-              activeTab === key
-                ? "bg-gold-500 text-white"
-                : "border border-navy-200 text-navy-600 hover:bg-navy-50"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Sub-tabs (underline tab bar) + status select.
+          On desktop: tabs left, filter right of the same row.
+          On mobile: tabs scroll horizontally, filter stacks below. */}
+      <div className="border-b border-navy-100">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          {/* Tab bar */}
+          <div className="-mb-px flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {subTabs.map(({ key, label }) => {
+              const active = activeTab === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => switchTab(key as TabKey)}
+                  className={`whitespace-nowrap border-b-2 px-3 pb-2.5 pt-1 text-sm font-medium transition-colors ${
+                    active
+                      ? "border-gold-500 text-gold-600"
+                      : "border-transparent text-navy-400 hover:border-navy-200 hover:text-navy-700"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Status filter — module-specific */}
-      <div className="flex flex-wrap gap-1.5">
-        {statusFilters.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setCurrentStatus(key)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              currentStatus === key
-                ? "bg-navy-100 text-navy-800"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+          {/* Status filter — native select for compact + great mobile UX */}
+          <div className="flex items-center gap-2 pb-2">
+            <label
+              htmlFor="status-filter"
+              className="text-xs font-medium text-navy-400"
+            >
+              Estado
+            </label>
+            <div className="relative">
+              <select
+                id="status-filter"
+                value={currentStatus}
+                onChange={(e) => setCurrentStatus(e.target.value)}
+                className="cursor-pointer appearance-none rounded-lg border border-navy-200 bg-white py-1.5 pl-3 pr-8 text-sm font-medium text-navy-700 transition-colors hover:border-navy-300 focus:border-gold-400 focus:outline-none focus:ring-2 focus:ring-gold-200"
+              >
+                {statusFilters.map(({ key, label }) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Loading */}
