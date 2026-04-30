@@ -4,10 +4,14 @@ import { useMemo, useState } from "react";
 import type { EventOrderRow } from "@/types/reports";
 import { formatCurrency } from "@/lib/format";
 import EditableEmailCell from "./EditableEmailCell";
+import SellerPickerCell, {
+  type SellerOption,
+} from "./SellerPickerCell";
 
 interface Props {
   data: EventOrderRow[];
   isAdmin: boolean;
+  sellers: SellerOption[];
 }
 
 const STATUS_FILTERS = [
@@ -21,13 +25,19 @@ const STATUS_FILTERS = [
 
 type StatusKey = (typeof STATUS_FILTERS)[number]["key"];
 
-export default function EventsOrdersTab({ data, isAdmin }: Props) {
+export default function EventsOrdersTab({ data, isAdmin, sellers }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusKey>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [emailOverrides, setEmailOverrides] = useState<Record<string, string>>(
     {},
   );
+  const [sellerOverrides, setSellerOverrides] = useState<
+    Record<
+      string,
+      { id: string | null; name: string | null; code: string | null }
+    >
+  >({});
 
   const events = useMemo(() => {
     const map = new Map<string, string>();
@@ -36,10 +46,16 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
   }, [data]);
 
   const filtered = useMemo(() => {
-    let result = data.map((o) => ({
-      ...o,
-      buyer_email: emailOverrides[o.id] || o.buyer_email,
-    }));
+    let result = data.map((o) => {
+      const so = sellerOverrides[o.id];
+      return {
+        ...o,
+        buyer_email: emailOverrides[o.id] || o.buyer_email,
+        seller_id: so ? so.id : o.seller_id,
+        seller_name: so ? so.name : o.seller_name,
+        seller_code: so ? so.code : o.seller_code,
+      };
+    });
     if (statusFilter !== "all") {
       result = result.filter((o) => o.status === statusFilter);
     }
@@ -57,7 +73,7 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
       );
     }
     return result;
-  }, [data, statusFilter, eventFilter, search, emailOverrides]);
+  }, [data, statusFilter, eventFilter, search, emailOverrides, sellerOverrides]);
 
   const counts = useMemo(() => {
     return {
@@ -141,8 +157,19 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
             key={o.id}
             order={o}
             isAdmin={isAdmin}
+            sellers={sellers}
             onEmailSaved={(email) =>
               setEmailOverrides((prev) => ({ ...prev, [o.id]: email }))
+            }
+            onSellerSaved={(seller) =>
+              setSellerOverrides((prev) => ({
+                ...prev,
+                [o.id]: {
+                  id: seller?.id || null,
+                  name: seller?.full_name || null,
+                  code: seller?.seller_code || null,
+                },
+              }))
             }
           />
         ))}
@@ -159,11 +186,15 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
 function OrderCard({
   order,
   isAdmin,
+  sellers,
   onEmailSaved,
+  onSellerSaved,
 }: {
   order: EventOrderRow;
   isAdmin: boolean;
+  sellers: SellerOption[];
   onEmailSaved: (email: string) => void;
+  onSellerSaved: (seller: SellerOption | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const totalQty = order.items.reduce((s, i) => s + i.quantity, 0);
@@ -229,20 +260,21 @@ function OrderCard({
             </div>
           </div>
 
-          {/* Seller */}
-          {order.seller_name && (
-            <div>
-              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
-                Vendedor
-              </p>
-              <p className="text-sm text-navy-700">{order.seller_name}</p>
-              {order.seller_code && (
-                <p className="font-mono text-[10px] text-navy-400">
-                  {order.seller_code}
-                </p>
-              )}
-            </div>
-          )}
+          {/* Seller — picker for admin, display for others */}
+          <div>
+            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
+              Vendedor
+            </p>
+            <SellerPickerCell
+              currentSellerId={order.seller_id}
+              currentSellerName={order.seller_name}
+              currentSellerCode={order.seller_code}
+              sellers={sellers}
+              endpoint={`/api/admin/orders/${order.id}/seller`}
+              disabled={!isAdmin}
+              onSaved={onSellerSaved}
+            />
+          </div>
 
           {/* Items */}
           <div>

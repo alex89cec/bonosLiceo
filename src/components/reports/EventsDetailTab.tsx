@@ -4,10 +4,14 @@ import { useMemo, useState } from "react";
 import type { EventTicketDetailRow } from "@/types/reports";
 import { formatCurrency } from "@/lib/format";
 import EditableEmailCell from "./EditableEmailCell";
+import SellerPickerCell, {
+  type SellerOption,
+} from "./SellerPickerCell";
 
 interface Props {
   data: EventTicketDetailRow[];
   isAdmin: boolean;
+  sellers: SellerOption[];
 }
 
 const STATUS_FILTERS = [
@@ -20,16 +24,21 @@ const STATUS_FILTERS = [
 
 type StatusKey = (typeof STATUS_FILTERS)[number]["key"];
 
-export default function EventsDetailTab({ data, isAdmin }: Props) {
+export default function EventsDetailTab({ data, isAdmin, sellers }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusKey>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  // emailOverrides keyed by ORDER_ID — when one ticket gets its email updated,
-  // all sibling tickets from the same order pick it up.
+  // overrides keyed by ORDER_ID — sibling tickets from the same order share buyer + seller
   const [emailOverrides, setEmailOverrides] = useState<Record<string, string>>(
     {},
   );
+  const [sellerOverrides, setSellerOverrides] = useState<
+    Record<
+      string,
+      { id: string | null; name: string | null; code: string | null }
+    >
+  >({});
 
   const events = useMemo(() => {
     const map = new Map<string, string>();
@@ -48,11 +57,17 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
   }, [data, eventFilter]);
 
   const filtered = useMemo(() => {
-    let result = data.map((r) => ({
-      ...r,
-      buyer_email:
-        (r.order_id && emailOverrides[r.order_id]) || r.buyer_email,
-    }));
+    let result = data.map((r) => {
+      const so = r.order_id ? sellerOverrides[r.order_id] : null;
+      return {
+        ...r,
+        buyer_email:
+          (r.order_id && emailOverrides[r.order_id]) || r.buyer_email,
+        seller_id: so ? so.id : r.seller_id,
+        seller_name: so ? so.name : r.seller_name,
+        seller_code: so ? so.code : r.seller_code,
+      };
+    });
 
     if (statusFilter !== "all") {
       result = result.filter((r) => r.status === statusFilter);
@@ -75,7 +90,15 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
       );
     }
     return result;
-  }, [data, statusFilter, eventFilter, typeFilter, search, emailOverrides]);
+  }, [
+    data,
+    statusFilter,
+    eventFilter,
+    typeFilter,
+    search,
+    emailOverrides,
+    sellerOverrides,
+  ]);
 
   const counts = useMemo(() => {
     return {
@@ -235,16 +258,26 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-xs">
-                  {r.seller_name ? (
-                    <div>
-                      <p className="text-navy-700">{r.seller_name}</p>
-                      {r.seller_code && (
-                        <p className="font-mono text-[10px] text-navy-400">
-                          {r.seller_code}
-                        </p>
-                      )}
-                    </div>
+                <td className="min-w-[140px] max-w-[180px] px-3 py-2 text-xs">
+                  {r.order_id ? (
+                    <SellerPickerCell
+                      currentSellerId={r.seller_id}
+                      currentSellerName={r.seller_name}
+                      currentSellerCode={r.seller_code}
+                      sellers={sellers}
+                      endpoint={`/api/admin/orders/${r.order_id}/seller`}
+                      disabled={!isAdmin}
+                      onSaved={(seller) =>
+                        setSellerOverrides((prev) => ({
+                          ...prev,
+                          [r.order_id!]: {
+                            id: seller?.id || null,
+                            name: seller?.full_name || null,
+                            code: seller?.seller_code || null,
+                          },
+                        }))
+                      }
+                    />
                   ) : (
                     <span className="text-navy-300">—</span>
                   )}
@@ -331,11 +364,6 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
               )}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-navy-400">
-              {r.seller_code && (
-                <span className="rounded-full bg-navy-50 px-2 py-0.5 font-mono text-navy-600">
-                  {r.seller_code}
-                </span>
-              )}
               {r.amount_paid !== null && r.amount_paid > 0 && (
                 <span className="font-semibold text-navy-600">
                   {formatCurrency(r.amount_paid)}
@@ -359,6 +387,32 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
                   minute: "2-digit",
                 })}
               </p>
+            )}
+            {/* Seller picker (mobile) */}
+            {r.order_id && (
+              <div className="mt-2 border-t border-navy-100 pt-2">
+                <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-navy-400">
+                  Vendedor
+                </p>
+                <SellerPickerCell
+                  currentSellerId={r.seller_id}
+                  currentSellerName={r.seller_name}
+                  currentSellerCode={r.seller_code}
+                  sellers={sellers}
+                  endpoint={`/api/admin/orders/${r.order_id}/seller`}
+                  disabled={!isAdmin}
+                  onSaved={(seller) =>
+                    setSellerOverrides((prev) => ({
+                      ...prev,
+                      [r.order_id!]: {
+                        id: seller?.id || null,
+                        name: seller?.full_name || null,
+                        code: seller?.seller_code || null,
+                      },
+                    }))
+                  }
+                />
+              </div>
             )}
           </div>
         ))}

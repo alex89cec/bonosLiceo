@@ -11,6 +11,7 @@ import EventsListTab from "@/components/reports/EventsListTab";
 import EventsOrdersTab from "@/components/reports/EventsOrdersTab";
 import EventsSellersTab from "@/components/reports/EventsSellersTab";
 import EventsDetailTab from "@/components/reports/EventsDetailTab";
+import type { SellerOption } from "@/components/reports/SellerPickerCell";
 import type {
   SummaryReport,
   CampaignReport,
@@ -103,14 +104,23 @@ export default function ReportsPage() {
     EventTicketDetailRow[] | null
   >(null);
 
+  // Sellers list for the "asignar vendedor" picker (admins only)
+  const [sellers, setSellers] = useState<SellerOption[]>([]);
+
   // Detect admin role for inline-edit permission (single check on mount)
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/profile");
         const json = await res.json();
-        if (res.ok) {
-          setIsAdmin(json.profile?.role === "admin");
+        if (res.ok && json.profile?.role === "admin") {
+          setIsAdmin(true);
+          // If admin, also load the seller options for the picker
+          const r2 = await fetch("/api/admin/seller-options");
+          if (r2.ok) {
+            const j2 = await r2.json();
+            setSellers(j2.sellers || []);
+          }
         }
       } catch {
         // ignore
@@ -312,7 +322,11 @@ export default function ReportsPage() {
             <GroupReportTab data={groupData} />
           )}
           {activeTab === "bonos-detail" && bonosDetailData && (
-            <BonosDetailTab data={bonosDetailData} isAdmin={isAdmin} />
+            <BonosDetailTab
+              data={bonosDetailData}
+              isAdmin={isAdmin}
+              sellers={sellers}
+            />
           )}
 
           {activeTab === "events-summary" && eventsSummary && (
@@ -322,13 +336,21 @@ export default function ReportsPage() {
             <EventsListTab data={eventsList} />
           )}
           {activeTab === "events-orders" && eventsOrders && (
-            <EventsOrdersTab data={eventsOrders} isAdmin={isAdmin} />
+            <EventsOrdersTab
+              data={eventsOrders}
+              isAdmin={isAdmin}
+              sellers={sellers}
+            />
           )}
           {activeTab === "events-sellers" && eventsSellers && (
             <EventsSellersTab data={eventsSellers} />
           )}
           {activeTab === "events-detail" && eventsDetail && (
-            <EventsDetailTab data={eventsDetail} isAdmin={isAdmin} />
+            <EventsDetailTab
+              data={eventsDetail}
+              isAdmin={isAdmin}
+              sellers={sellers}
+            />
           )}
         </>
       )}
