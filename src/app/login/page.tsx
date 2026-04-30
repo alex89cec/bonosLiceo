@@ -103,7 +103,7 @@ function LoginForm() {
             id="password"
             type="password"
             className="input-field"
-            placeholder="••••••••"
+            placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -146,6 +146,23 @@ function LoginForm() {
             "Ingresar"
           )}
         </button>
+
+        <Link
+          href="/"
+          className="mt-2 flex items-center justify-center gap-1 text-sm text-navy-400 transition-colors hover:text-navy-700"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-4 w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+          Volver al inicio
+        </Link>
       </form>
     </div>
   );
