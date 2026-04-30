@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { EventOrderRow } from "@/types/reports";
 import { formatCurrency } from "@/lib/format";
 import EditableEmailCell from "./EditableEmailCell";
@@ -188,6 +188,8 @@ function OrderCard({
   onSellerSaved: (seller: SellerOption | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
   const totalQty = order.items.reduce((s, i) => s + i.quantity, 0);
   const dateStr = new Date(order.created_at).toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -195,6 +197,23 @@ function OrderCard({
     hour: "2-digit",
     minute: "2-digit",
   });
+  const isImageReceipt =
+    order.receipt_filename?.match(/\.(jpe?g|png|webp|gif)$/i) != null;
+
+  // Lazy-load the signed receipt URL when the card expands
+  useEffect(() => {
+    if (!expanded || !order.receipt_filename || receiptUrl || receiptLoading) {
+      return;
+    }
+    setReceiptLoading(true);
+    fetch(`/api/admin/orders/${order.id}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.receipt_signed_url) setReceiptUrl(j.receipt_signed_url);
+      })
+      .catch(() => {})
+      .finally(() => setReceiptLoading(false));
+  }, [expanded, order.id, order.receipt_filename, receiptUrl, receiptLoading]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-navy-100 bg-white shadow-sm">
@@ -296,7 +315,57 @@ function OrderCard({
 
           {/* Receipt */}
           {order.receipt_filename && (
-            <p className="text-navy-500">📎 {order.receipt_filename}</p>
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
+                Comprobante
+              </p>
+              {receiptUrl ? (
+                <>
+                  <a
+                    href={receiptUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    📎 {order.receipt_filename}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
+                    </svg>
+                  </a>
+                  {/* Inline preview for images */}
+                  {isImageReceipt && (
+                    <a
+                      href={receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 block overflow-hidden rounded-xl border border-navy-100 transition-shadow hover:shadow-md"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={receiptUrl}
+                        alt="Comprobante"
+                        className="max-h-72 w-full object-contain bg-navy-50"
+                      />
+                    </a>
+                  )}
+                </>
+              ) : receiptLoading ? (
+                <p className="text-[11px] text-navy-400">Cargando...</p>
+              ) : (
+                <p className="text-[11px] text-navy-400">📎 {order.receipt_filename}</p>
+              )}
+            </div>
           )}
 
           {/* Rejection reason */}
