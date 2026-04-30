@@ -109,3 +109,138 @@ export interface SummaryCampaign {
   percent: number;
   reservations: SummaryCampaignReservation[];
 }
+
+// ============================================================
+// Bonos detail (per-reservation report)
+// ============================================================
+export interface BonosDetailRow {
+  id: string; // reservation id
+  ticket_number: string;
+  campaign_id: string;
+  campaign_name: string;
+  campaign_status: string;
+  seller_id: string | null;
+  seller_name: string | null;
+  seller_code: string | null;
+  buyer_id: string;
+  buyer_email: string;
+  buyer_name: string | null;
+  status: "active" | "confirmed" | "cancelled";
+  payment_status: "pending" | "partial" | "completed" | null;
+  amount: number;
+  created_at: string;
+}
+
+// ============================================================
+// Events reports
+// ============================================================
+export interface EventsSummary {
+  total_events: number;
+  active_events: number;
+  total_orders: number;
+  approved_orders: number;
+  pending_orders: number; // pending_review + awaiting_receipt
+  rejected_orders: number;
+  complimentary_orders: number;
+  total_tickets_issued: number;
+  total_amount_collected: number;
+  total_amount_pending: number;
+}
+
+export interface EventReportTypeBreakdown {
+  id: string;
+  name: string;
+  color: string;
+  quantity: number | null; // null = unlimited
+  sold: number;
+  pending: number;
+  is_bundle: boolean;
+}
+
+export interface EventReportRow {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  event_date: string;
+  venue: string | null;
+  total_orders: number;
+  approved_orders: number;
+  pending_orders: number;
+  rejected_orders: number;
+  tickets_issued: number;
+  total_amount_collected: number;
+  total_amount_pending: number;
+  types: EventReportTypeBreakdown[];
+}
+
+export interface EventOrderItem {
+  ticket_type_id: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  is_bundle?: boolean;
+}
+
+export interface EventOrderRow {
+  id: string;
+  event_id: string;
+  event_name: string;
+  buyer_id: string;
+  buyer_email: string;
+  buyer_name: string | null;
+  seller_id: string | null;
+  seller_name: string | null;
+  seller_code: string | null;
+  items: EventOrderItem[];
+  total_amount: number;
+  payment_method: string;
+  receipt_filename: string | null;
+  status: string; // pending_review/awaiting_receipt/approved/rejected/complimentary/cancelled
+  rejection_reason: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface EventsSellerEventBreakdown {
+  event_id: string;
+  event_name: string;
+  approved_orders: number;
+  pending_orders: number;
+  amount_collected: number;
+}
+
+export interface EventsSellerReport {
+  id: string;
+  name: string;
+  email: string;
+  code: string | null;
+  total_orders: number;
+  approved_orders: number;
+  pending_orders: number;
+  total_amount_collected: number;
+  events: EventsSellerEventBreakdown[];
+}
+
+export interface EventTicketDetailRow {
+  id: string;
+  short_id: string; // first 6 chars of ID for display
+  event_id: string;
+  event_name: string;
+  ticket_type_id: string;
+  ticket_type_name: string;
+  ticket_type_color: string | null;
+  parent_bundle_type_name: string | null;
+  buyer_id: string;
+  buyer_name: string | null;
+  buyer_email: string;
+  seller_id: string | null;
+  seller_name: string | null;
+  seller_code: string | null;
+  order_id: string | null;
+  amount_paid: number | null;
+  status: string; // valid | used | cancelled | refunded
+  is_complimentary: boolean;
+  entered_at: string | null;
+  created_at: string;
+}

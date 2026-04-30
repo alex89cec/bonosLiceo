@@ -10,6 +10,15 @@ import type {
   SummaryReport,
   SummaryCampaign,
   SummaryCampaignReservation,
+  BonosDetailRow,
+  EventsSummary,
+  EventReportRow,
+  EventReportTypeBreakdown,
+  EventOrderRow,
+  EventOrderItem,
+  EventsSellerReport,
+  EventsSellerEventBreakdown,
+  EventTicketDetailRow,
 } from "@/types/reports";
 
 export async function GET(request: NextRequest) {
@@ -25,10 +34,13 @@ export async function GET(request: NextRequest) {
     }
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, is_active, is_approver")
       .eq("id", user.id)
       .single();
-    if (!profile || profile.role !== "admin") {
+    const allowed =
+      profile?.is_active &&
+      (profile.role === "admin" || profile.is_approver === true);
+    if (!profile || !allowed) {
       return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
     }
 
@@ -523,6 +535,497 @@ export async function GET(request: NextRequest) {
 
       result.sort((a, b) => b.total_sold - a.total_sold);
       return NextResponse.json(result);
+    }
+
+    // ── TAB: bonos-detail ──
+    // Per-reservation report: every active/confirmed/cancelled reservation
+    // with its ticket number, seller, buyer, and current payment status.
+    if (tab === "bonos-detail") {
+      // Look up additional joined data (buyers, ticket numbers)
+      const buyerIds = [...new Set(allReservations.map((r) => r.buyer_id))];
+      const { data: buyersFull } = buyerIds.length
+        ? await supabase
+            .from("buyers")
+            .select("id, email, full_name")
+            .in("id", buyerIds)
+        : { data: [] };
+
+      const ticketIds = allReservations.map((r) => r.ticket_id).filter(Boolean);
+      let ticketNumberMap2 = new Map<string, string>();
+      if (ticketIds.length > 0) {
+        const { data: ticketRows } = await supabase
+          .from("tickets")
+          .select("id, number")
+          .in("id", ticketIds);
+        for (const t of ticketRows || []) ticketNumberMap2.set(t.id, t.number);
+      }
+      const buyerById = new Map(
+        (buyersFull || []).map((b) => [
+          b.id,
+          { email: b.email as string, full_name: (b.full_name as string) || null },
+        ]),
+      );
+
+      // Enrich reservations with timestamps (needed for sorting/display)
+      // Re-fetch with created_at since the base query doesn't have it
+      const { data: reservationsWithDate } = await supabase
+        .from("reservations")
+        .select("id, created_at");
+      const dateById = new Map(
+        (reservationsWithDate || []).map((r) => [
+          r.id as string,
+          r.created_at as string,
+        ]),
+      );
+
+      // Payment status by reservation
+      const paymentByRes = new Map(
+        allPayments.map((p) => [
+          p.reservation_id,
+          { status: p.status as string, amount: p.amount as number },
+        ]),
+      );
+
+      const rows: BonosDetailRow[] = allReservations
+        .filter((r) => filteredCampaignIds.has(r.campaign_id))
+        .map((r) => {
+          const seller = allProfiles.find((p) => p.id === r.seller_id);
+          const buyer = buyerById.get(r.buyer_id);
+          const campaign = allCampaigns.find((c) => c.id === r.campaign_id);
+          const payment = paymentByRes.get(r.id);
+          return {
+            id: r.id,
+            ticket_number: ticketNumberMap2.get(r.ticket_id) || "—",
+            campaign_id: r.campaign_id,
+            campaign_name: campaign?.name || "—",
+            campaign_status: campaign?.status || "—",
+            seller_id: r.seller_id || null,
+            seller_name: seller?.full_name || null,
+            seller_code: seller?.seller_code || null,
+            buyer_id: r.buyer_id,
+            buyer_email: buyer?.email || "—",
+            buyer_name: buyer?.full_name || null,
+            status: r.status as "active" | "confirmed" | "cancelled",
+            payment_status:
+              (payment?.status as "pending" | "partial" | "completed") ?? null,
+            amount: payment?.amount || 0,
+            created_at: dateById.get(r.id) || "",
+          };
+        })
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+      return NextResponse.json(rows);
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // EVENT REPORTS
+    // ────────────────────────────────────────────────────────────
+    // For event reports we use a separate set of queries focused on the
+    // events module (event_orders + event_tickets). Status filter for
+    // events: active/past/cancelled, with "all" excluding past+cancelled
+    // (mirroring the public/seller behavior — closed events stay hidden
+    // unless you specifically ask).
+
+    if (tab.startsWith("events-")) {
+      // Fetch events filtered by status:
+      // - "all" → everything except `past` (mirrors how Bonos hides closed)
+      // - specific status → only that status
+      let eventsQuery = supabase
+        .from("events")
+        .select("id, name, slug, status, event_date, venue");
+
+      if (statusFilter === "all") {
+        eventsQuery = eventsQuery.neq("status", "past");
+      } else {
+        eventsQuery = eventsQuery.eq("status", statusFilter);
+      }
+
+      const { data: events } = await eventsQuery.order("event_date", {
+        ascending: false,
+      });
+      const eventsList = events || [];
+      const eventIdsForReport = new Set(eventsList.map((e) => e.id));
+
+      // All orders + tickets in scope
+      const [
+        { data: eventOrders },
+        { data: eventTickets },
+        { data: eventTypes },
+        { data: eventBuyers },
+        { data: eventSellers },
+      ] = await Promise.all([
+        supabase
+          .from("event_orders")
+          .select(
+            "id, event_id, buyer_id, seller_id, items, total_amount, payment_method, receipt_filename, status, rejection_reason, notes, created_at, reviewed_at",
+          ),
+        supabase.from("event_tickets").select(
+          "id, event_id, ticket_type_id, parent_bundle_type_id, status, order_id",
+        ),
+        supabase
+          .from("event_ticket_types")
+          .select("id, event_id, name, color, quantity, bundle_items"),
+        supabase.from("buyers").select("id, email, full_name"),
+        supabase.from("profiles").select("id, full_name, email, seller_code"),
+      ]);
+
+      const orders = (eventOrders || []).filter((o) =>
+        eventIdsForReport.has(o.event_id as string),
+      );
+      const tickets = (eventTickets || []).filter((t) =>
+        eventIdsForReport.has(t.event_id as string),
+      );
+      const types = eventTypes || [];
+      const buyersMapEv = new Map(
+        (eventBuyers || []).map((b) => [
+          b.id as string,
+          {
+            email: b.email as string,
+            full_name: (b.full_name as string) || null,
+          },
+        ]),
+      );
+      const profilesMapEv = new Map(
+        (eventSellers || []).map((p) => [
+          p.id as string,
+          {
+            full_name: p.full_name as string,
+            email: p.email as string,
+            seller_code: (p.seller_code as string) || null,
+          },
+        ]),
+      );
+
+      // events-summary
+      if (tab === "events-summary") {
+        const summary: EventsSummary = {
+          total_events: eventsList.length,
+          active_events: eventsList.filter((e) => e.status === "active").length,
+          total_orders: orders.length,
+          approved_orders: orders.filter((o) => o.status === "approved").length,
+          pending_orders: orders.filter(
+            (o) =>
+              o.status === "pending_review" || o.status === "awaiting_receipt",
+          ).length,
+          rejected_orders: orders.filter((o) => o.status === "rejected").length,
+          complimentary_orders: orders.filter(
+            (o) => o.status === "complimentary",
+          ).length,
+          total_tickets_issued: tickets.filter(
+            (t) => t.status === "valid" || t.status === "used",
+          ).length,
+          total_amount_collected: orders
+            .filter((o) => o.status === "approved")
+            .reduce((s, o) => s + Number(o.total_amount || 0), 0),
+          total_amount_pending: orders
+            .filter(
+              (o) =>
+                o.status === "pending_review" ||
+                o.status === "awaiting_receipt",
+            )
+            .reduce((s, o) => s + Number(o.total_amount || 0), 0),
+        };
+        return NextResponse.json(summary);
+      }
+
+      // events-list — per-event breakdown
+      if (tab === "events-list") {
+        const result: EventReportRow[] = [];
+        for (const e of eventsList) {
+          const eventOrders = orders.filter((o) => o.event_id === e.id);
+          const eventTks = tickets.filter((t) => t.event_id === e.id);
+          const eventTps = types.filter((t) => t.event_id === e.id);
+
+          const typesBreakdown: EventReportTypeBreakdown[] = eventTps.map(
+            (t) => {
+              const isBundle =
+                Array.isArray(t.bundle_items) && t.bundle_items.length > 0;
+
+              let sold = 0;
+              if (isBundle) {
+                // Count tickets generated by this bundle, divided by tickets-per-bundle
+                const ticketsFromBundle = eventTks.filter(
+                  (tk) =>
+                    tk.parent_bundle_type_id === t.id &&
+                    (tk.status === "valid" || tk.status === "used"),
+                ).length;
+                const ticketsPerBundle = (
+                  t.bundle_items as { quantity: number }[]
+                ).reduce((s, c) => s + c.quantity, 0);
+                sold = Math.ceil(
+                  ticketsFromBundle / Math.max(ticketsPerBundle, 1),
+                );
+              } else {
+                sold = eventTks.filter(
+                  (tk) =>
+                    tk.ticket_type_id === t.id &&
+                    !tk.parent_bundle_type_id &&
+                    (tk.status === "valid" || tk.status === "used"),
+                ).length;
+              }
+
+              // Pending = quantities in pending orders for this type
+              let pending = 0;
+              for (const o of eventOrders) {
+                if (
+                  o.status !== "pending_review" &&
+                  o.status !== "awaiting_receipt"
+                )
+                  continue;
+                const items = (o.items as
+                  | { ticket_type_id: string; quantity: number }[]
+                  | null) || [];
+                for (const it of items) {
+                  if (it.ticket_type_id === t.id) pending += it.quantity;
+                }
+              }
+
+              return {
+                id: t.id as string,
+                name: t.name as string,
+                color: (t.color as string) || "gray",
+                quantity: t.quantity === null ? null : (t.quantity as number),
+                sold,
+                pending,
+                is_bundle: isBundle,
+              };
+            },
+          );
+
+          result.push({
+            id: e.id as string,
+            name: e.name as string,
+            slug: e.slug as string,
+            status: e.status as string,
+            event_date: e.event_date as string,
+            venue: (e.venue as string) || null,
+            total_orders: eventOrders.length,
+            approved_orders: eventOrders.filter((o) => o.status === "approved")
+              .length,
+            pending_orders: eventOrders.filter(
+              (o) =>
+                o.status === "pending_review" ||
+                o.status === "awaiting_receipt",
+            ).length,
+            rejected_orders: eventOrders.filter((o) => o.status === "rejected")
+              .length,
+            tickets_issued: eventTks.filter(
+              (t) => t.status === "valid" || t.status === "used",
+            ).length,
+            total_amount_collected: eventOrders
+              .filter((o) => o.status === "approved")
+              .reduce((s, o) => s + Number(o.total_amount || 0), 0),
+            total_amount_pending: eventOrders
+              .filter(
+                (o) =>
+                  o.status === "pending_review" ||
+                  o.status === "awaiting_receipt",
+              )
+              .reduce((s, o) => s + Number(o.total_amount || 0), 0),
+            types: typesBreakdown,
+          });
+        }
+        return NextResponse.json(result);
+      }
+
+      // events-orders — flat list with all info for the table
+      if (tab === "events-orders") {
+        const eventNameById = new Map(
+          eventsList.map((e) => [e.id as string, e.name as string]),
+        );
+        const rows: EventOrderRow[] = orders.map((o) => {
+          const buyer = buyersMapEv.get(o.buyer_id as string);
+          const seller = o.seller_id
+            ? profilesMapEv.get(o.seller_id as string)
+            : null;
+          return {
+            id: o.id as string,
+            event_id: o.event_id as string,
+            event_name: eventNameById.get(o.event_id as string) || "—",
+            buyer_id: o.buyer_id as string,
+            buyer_email: buyer?.email || "—",
+            buyer_name: buyer?.full_name || null,
+            seller_id: (o.seller_id as string) || null,
+            seller_name: seller?.full_name || null,
+            seller_code: seller?.seller_code || null,
+            items: (o.items as EventOrderItem[]) || [],
+            total_amount: Number(o.total_amount || 0),
+            payment_method: o.payment_method as string,
+            receipt_filename: (o.receipt_filename as string) || null,
+            status: o.status as string,
+            rejection_reason: (o.rejection_reason as string) || null,
+            created_at: o.created_at as string,
+            reviewed_at: (o.reviewed_at as string) || null,
+          };
+        });
+        rows.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        return NextResponse.json(rows);
+      }
+
+      // events-sellers — sellers ranked by event sales
+      if (tab === "events-sellers") {
+        const sellersMap = new Map<
+          string,
+          {
+            id: string;
+            name: string;
+            email: string;
+            code: string | null;
+            total_orders: number;
+            approved_orders: number;
+            pending_orders: number;
+            total_amount_collected: number;
+            events: Map<
+              string,
+              {
+                event_id: string;
+                event_name: string;
+                approved_orders: number;
+                pending_orders: number;
+                amount_collected: number;
+              }
+            >;
+          }
+        >();
+
+        const eventNameById = new Map(
+          eventsList.map((e) => [e.id as string, e.name as string]),
+        );
+
+        for (const o of orders) {
+          if (!o.seller_id) continue;
+          const sellerId = o.seller_id as string;
+          const sellerProfile = profilesMapEv.get(sellerId);
+          if (!sellerProfile) continue;
+
+          if (!sellersMap.has(sellerId)) {
+            sellersMap.set(sellerId, {
+              id: sellerId,
+              name: sellerProfile.full_name,
+              email: sellerProfile.email,
+              code: sellerProfile.seller_code,
+              total_orders: 0,
+              approved_orders: 0,
+              pending_orders: 0,
+              total_amount_collected: 0,
+              events: new Map(),
+            });
+          }
+          const s = sellersMap.get(sellerId)!;
+          s.total_orders++;
+          if (o.status === "approved") {
+            s.approved_orders++;
+            s.total_amount_collected += Number(o.total_amount || 0);
+          }
+          if (
+            o.status === "pending_review" ||
+            o.status === "awaiting_receipt"
+          ) {
+            s.pending_orders++;
+          }
+
+          const evId = o.event_id as string;
+          if (!s.events.has(evId)) {
+            s.events.set(evId, {
+              event_id: evId,
+              event_name: eventNameById.get(evId) || "—",
+              approved_orders: 0,
+              pending_orders: 0,
+              amount_collected: 0,
+            });
+          }
+          const ev = s.events.get(evId)!;
+          if (o.status === "approved") {
+            ev.approved_orders++;
+            ev.amount_collected += Number(o.total_amount || 0);
+          }
+          if (
+            o.status === "pending_review" ||
+            o.status === "awaiting_receipt"
+          ) {
+            ev.pending_orders++;
+          }
+        }
+
+        const result: EventsSellerReport[] = Array.from(
+          sellersMap.values(),
+        ).map((s) => ({
+          id: s.id,
+          name: s.name,
+          email: s.email,
+          code: s.code,
+          total_orders: s.total_orders,
+          approved_orders: s.approved_orders,
+          pending_orders: s.pending_orders,
+          total_amount_collected: s.total_amount_collected,
+          events: Array.from(s.events.values()) as EventsSellerEventBreakdown[],
+        }));
+
+        result.sort(
+          (a, b) => b.total_amount_collected - a.total_amount_collected,
+        );
+        return NextResponse.json(result);
+      }
+
+      // events-detail — flat list of every event_ticket with editable email
+      if (tab === "events-detail") {
+        // Fetch tickets in scope
+        const { data: ticketsRaw } = await supabase
+          .from("event_tickets")
+          .select(
+            "id, event_id, ticket_type_id, parent_bundle_type_id, buyer_id, seller_id, order_id, amount_paid, status, is_complimentary, entered_at, created_at",
+          )
+          .in("event_id", Array.from(eventIdsForReport))
+          .order("created_at", { ascending: false });
+
+        const ticketsAll = ticketsRaw || [];
+        const eventNameById = new Map(
+          eventsList.map((e) => [e.id as string, e.name as string]),
+        );
+        const typeById = new Map(
+          types.map((t) => [
+            t.id as string,
+            { name: t.name as string, color: (t.color as string) || "gray" },
+          ]),
+        );
+
+        const rows: EventTicketDetailRow[] = ticketsAll.map((t) => {
+          const buyer = buyersMapEv.get(t.buyer_id as string);
+          const seller = t.seller_id
+            ? profilesMapEv.get(t.seller_id as string)
+            : null;
+          const type = typeById.get(t.ticket_type_id as string);
+          const parentBundle = t.parent_bundle_type_id
+            ? typeById.get(t.parent_bundle_type_id as string)
+            : null;
+          const id = t.id as string;
+          return {
+            id,
+            short_id: id.slice(0, 8).toUpperCase(),
+            event_id: t.event_id as string,
+            event_name: eventNameById.get(t.event_id as string) || "—",
+            ticket_type_id: t.ticket_type_id as string,
+            ticket_type_name: type?.name || "—",
+            ticket_type_color: type?.color || null,
+            parent_bundle_type_name: parentBundle?.name || null,
+            buyer_id: t.buyer_id as string,
+            buyer_name: buyer?.full_name || null,
+            buyer_email: buyer?.email || "—",
+            seller_id: (t.seller_id as string) || null,
+            seller_name: seller?.full_name || null,
+            seller_code: seller?.seller_code || null,
+            order_id: (t.order_id as string) || null,
+            amount_paid:
+              t.amount_paid !== null ? Number(t.amount_paid) : null,
+            status: t.status as string,
+            is_complimentary: Boolean(t.is_complimentary),
+            entered_at: (t.entered_at as string) || null,
+            created_at: t.created_at as string,
+          };
+        });
+
+        return NextResponse.json(rows);
+      }
     }
 
     return NextResponse.json({ error: "Tab inválida" }, { status: 400 });
