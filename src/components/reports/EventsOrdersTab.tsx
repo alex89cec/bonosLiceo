@@ -7,6 +7,7 @@ import EditableEmailCell from "./EditableEmailCell";
 import SellerPickerCell, {
   type SellerOption,
 } from "./SellerPickerCell";
+import FilterSelect from "./FilterSelect";
 
 interface Props {
   data: EventOrderRow[];
@@ -89,27 +90,9 @@ export default function EventsOrdersTab({ data, isAdmin, sellers }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Status filter pills */}
-      <div className="flex flex-wrap gap-1.5">
-        {STATUS_FILTERS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setStatusFilter(key)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              statusFilter === key
-                ? "bg-navy-700 text-white"
-                : "border border-navy-200 text-navy-600 hover:bg-navy-50"
-            }`}
-          >
-            {label}
-            <span className="ml-1 opacity-70">{counts[key]}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Search + event filter */}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
+      {/* Filters: search + status + event — all in one wrap row */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div className="relative min-w-[200px] flex-1">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400"
@@ -132,18 +115,26 @@ export default function EventsOrdersTab({ data, isAdmin, sellers }: Props) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <select
-          className="input-field sm:max-w-xs"
+
+        <FilterSelect
+          label="Estado"
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as StatusKey)}
+          options={STATUS_FILTERS.map((s) => ({
+            value: s.key,
+            label: `${s.label} (${counts[s.key]})`,
+          }))}
+        />
+
+        <FilterSelect
+          label="Evento"
           value={eventFilter}
-          onChange={(e) => setEventFilter(e.target.value)}
-        >
-          <option value="all">Todos los eventos</option>
-          {events.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
+          onChange={setEventFilter}
+          options={[
+            { value: "all", label: "Todos" },
+            ...events.map(([id, name]) => ({ value: id, label: name })),
+          ]}
+        />
       </div>
 
       <p className="text-xs text-navy-400">
