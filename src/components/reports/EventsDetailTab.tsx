@@ -4,10 +4,15 @@ import { useMemo, useState } from "react";
 import type { EventTicketDetailRow } from "@/types/reports";
 import { formatCurrency } from "@/lib/format";
 import EditableEmailCell from "./EditableEmailCell";
+import SellerPickerCell, {
+  type SellerOption,
+} from "./SellerPickerCell";
+import FilterSelect from "./FilterSelect";
 
 interface Props {
   data: EventTicketDetailRow[];
   isAdmin: boolean;
+  sellers: SellerOption[];
 }
 
 const STATUS_FILTERS = [
@@ -20,16 +25,21 @@ const STATUS_FILTERS = [
 
 type StatusKey = (typeof STATUS_FILTERS)[number]["key"];
 
-export default function EventsDetailTab({ data, isAdmin }: Props) {
+export default function EventsDetailTab({ data, isAdmin, sellers }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusKey>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  // emailOverrides keyed by ORDER_ID — when one ticket gets its email updated,
-  // all sibling tickets from the same order pick it up.
+  // overrides keyed by ORDER_ID — sibling tickets from the same order share buyer + seller
   const [emailOverrides, setEmailOverrides] = useState<Record<string, string>>(
     {},
   );
+  const [sellerOverrides, setSellerOverrides] = useState<
+    Record<
+      string,
+      { id: string | null; name: string | null; code: string | null }
+    >
+  >({});
 
   const events = useMemo(() => {
     const map = new Map<string, string>();
@@ -48,11 +58,17 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
   }, [data, eventFilter]);
 
   const filtered = useMemo(() => {
-    let result = data.map((r) => ({
-      ...r,
-      buyer_email:
-        (r.order_id && emailOverrides[r.order_id]) || r.buyer_email,
-    }));
+    let result = data.map((r) => {
+      const so = r.order_id ? sellerOverrides[r.order_id] : null;
+      return {
+        ...r,
+        buyer_email:
+          (r.order_id && emailOverrides[r.order_id]) || r.buyer_email,
+        seller_id: so ? so.id : r.seller_id,
+        seller_name: so ? so.name : r.seller_name,
+        seller_code: so ? so.code : r.seller_code,
+      };
+    });
 
     if (statusFilter !== "all") {
       result = result.filter((r) => r.status === statusFilter);
@@ -75,7 +91,15 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
       );
     }
     return result;
-  }, [data, statusFilter, eventFilter, typeFilter, search, emailOverrides]);
+  }, [
+    data,
+    statusFilter,
+    eventFilter,
+    typeFilter,
+    search,
+    emailOverrides,
+    sellerOverrides,
+  ]);
 
   const counts = useMemo(() => {
     return {
@@ -89,27 +113,9 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Status filter pills */}
-      <div className="flex flex-wrap gap-1.5">
-        {STATUS_FILTERS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setStatusFilter(key)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              statusFilter === key
-                ? "bg-navy-700 text-white"
-                : "border border-navy-200 text-navy-600 hover:bg-navy-50"
-            }`}
-          >
-            {label}
-            <span className="ml-1 opacity-70">{counts[key]}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Search + event/type filters */}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
+      {/* Filters: search + status + event + type — all in one wrap row */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div className="relative min-w-[200px] flex-1">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400"
@@ -132,33 +138,39 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <select
-          className="input-field sm:max-w-xs"
+
+        <FilterSelect
+          label="Estado"
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as StatusKey)}
+          options={STATUS_FILTERS.map((s) => ({
+            value: s.key,
+            label: `${s.label} (${counts[s.key]})`,
+          }))}
+        />
+
+        <FilterSelect
+          label="Evento"
           value={eventFilter}
-          onChange={(e) => {
-            setEventFilter(e.target.value);
+          onChange={(v) => {
+            setEventFilter(v);
             setTypeFilter("all"); // reset type when event changes
           }}
-        >
-          <option value="all">Todos los eventos</option>
-          {events.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input-field sm:max-w-xs"
+          options={[
+            { value: "all", label: "Todos" },
+            ...events.map(([id, name]) => ({ value: id, label: name })),
+          ]}
+        />
+
+        <FilterSelect
+          label="Tipo"
           value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-        >
-          <option value="all">Todos los tipos</option>
-          {types.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
+          onChange={setTypeFilter}
+          options={[
+            { value: "all", label: "Todos" },
+            ...types.map(([id, name]) => ({ value: id, label: name })),
+          ]}
+        />
       </div>
 
       <p className="text-xs text-navy-400">
@@ -235,16 +247,26 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-xs">
-                  {r.seller_name ? (
-                    <div>
-                      <p className="text-navy-700">{r.seller_name}</p>
-                      {r.seller_code && (
-                        <p className="font-mono text-[10px] text-navy-400">
-                          {r.seller_code}
-                        </p>
-                      )}
-                    </div>
+                <td className="min-w-[140px] max-w-[180px] px-3 py-2 text-xs">
+                  {r.order_id ? (
+                    <SellerPickerCell
+                      currentSellerId={r.seller_id}
+                      currentSellerName={r.seller_name}
+                      currentSellerCode={r.seller_code}
+                      sellers={sellers}
+                      endpoint={`/api/admin/orders/${r.order_id}/seller`}
+                      disabled={!isAdmin}
+                      onSaved={(seller) =>
+                        setSellerOverrides((prev) => ({
+                          ...prev,
+                          [r.order_id!]: {
+                            id: seller?.id || null,
+                            name: seller?.full_name || null,
+                            code: seller?.seller_code || null,
+                          },
+                        }))
+                      }
+                    />
                   ) : (
                     <span className="text-navy-300">—</span>
                   )}
@@ -331,11 +353,6 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
               )}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-navy-400">
-              {r.seller_code && (
-                <span className="rounded-full bg-navy-50 px-2 py-0.5 font-mono text-navy-600">
-                  {r.seller_code}
-                </span>
-              )}
               {r.amount_paid !== null && r.amount_paid > 0 && (
                 <span className="font-semibold text-navy-600">
                   {formatCurrency(r.amount_paid)}
@@ -359,6 +376,32 @@ export default function EventsDetailTab({ data, isAdmin }: Props) {
                   minute: "2-digit",
                 })}
               </p>
+            )}
+            {/* Seller picker (mobile) */}
+            {r.order_id && (
+              <div className="mt-2 border-t border-navy-100 pt-2">
+                <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-navy-400">
+                  Vendedor
+                </p>
+                <SellerPickerCell
+                  currentSellerId={r.seller_id}
+                  currentSellerName={r.seller_name}
+                  currentSellerCode={r.seller_code}
+                  sellers={sellers}
+                  endpoint={`/api/admin/orders/${r.order_id}/seller`}
+                  disabled={!isAdmin}
+                  onSaved={(seller) =>
+                    setSellerOverrides((prev) => ({
+                      ...prev,
+                      [r.order_id!]: {
+                        id: seller?.id || null,
+                        name: seller?.full_name || null,
+                        code: seller?.seller_code || null,
+                      },
+                    }))
+                  }
+                />
+              </div>
             )}
           </div>
         ))}

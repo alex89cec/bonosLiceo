@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/format";
 
@@ -57,6 +57,8 @@ export default function EventOrderCard({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
 
   const status = STATUS_CONFIG[order.status] || {
     label: order.status,
@@ -68,6 +70,20 @@ export default function EventOrderCard({
   const isAwaitingReceipt = order.status === "awaiting_receipt";
   const hasTickets =
     order.status === "approved" || order.status === "complimentary";
+  // Lazy-load the signed receipt URL when the card expands
+  useEffect(() => {
+    if (!expanded || !order.receipt_filename || receiptUrl || receiptLoading) {
+      return;
+    }
+    setReceiptLoading(true);
+    fetch(`/api/orders/${order.id}/receipt-url`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.url) setReceiptUrl(j.url);
+      })
+      .catch(() => {})
+      .finally(() => setReceiptLoading(false));
+  }, [expanded, order.id, order.receipt_filename, receiptUrl, receiptLoading]);
 
   async function uploadReceipt() {
     if (!receiptFile) {
@@ -204,11 +220,43 @@ export default function EventOrderCard({
             </div>
           )}
 
-          {/* Receipt info (if uploaded) */}
+          {/* Receipt — clickable link, opens in new tab */}
           {order.receipt_filename && (
-            <p className="text-xs text-navy-400">
-              📎 {order.receipt_filename}
-            </p>
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
+                Comprobante
+              </p>
+              {receiptUrl ? (
+                <a
+                  href={receiptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                >
+                  📎 {order.receipt_filename}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-3 w-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                </a>
+              ) : receiptLoading ? (
+                <p className="text-xs text-navy-400">Cargando...</p>
+              ) : (
+                <p className="text-xs text-navy-400">
+                  📎 {order.receipt_filename}
+                </p>
+              )}
+            </div>
           )}
 
           {/* Actions */}

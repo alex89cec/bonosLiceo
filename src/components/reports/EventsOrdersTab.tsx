@@ -1,13 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { EventOrderRow } from "@/types/reports";
 import { formatCurrency } from "@/lib/format";
 import EditableEmailCell from "./EditableEmailCell";
+import SellerPickerCell, {
+  type SellerOption,
+} from "./SellerPickerCell";
+import FilterSelect from "./FilterSelect";
 
 interface Props {
   data: EventOrderRow[];
   isAdmin: boolean;
+  sellers: SellerOption[];
 }
 
 const STATUS_FILTERS = [
@@ -21,13 +26,19 @@ const STATUS_FILTERS = [
 
 type StatusKey = (typeof STATUS_FILTERS)[number]["key"];
 
-export default function EventsOrdersTab({ data, isAdmin }: Props) {
+export default function EventsOrdersTab({ data, isAdmin, sellers }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusKey>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [emailOverrides, setEmailOverrides] = useState<Record<string, string>>(
     {},
   );
+  const [sellerOverrides, setSellerOverrides] = useState<
+    Record<
+      string,
+      { id: string | null; name: string | null; code: string | null }
+    >
+  >({});
 
   const events = useMemo(() => {
     const map = new Map<string, string>();
@@ -36,10 +47,16 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
   }, [data]);
 
   const filtered = useMemo(() => {
-    let result = data.map((o) => ({
-      ...o,
-      buyer_email: emailOverrides[o.id] || o.buyer_email,
-    }));
+    let result = data.map((o) => {
+      const so = sellerOverrides[o.id];
+      return {
+        ...o,
+        buyer_email: emailOverrides[o.id] || o.buyer_email,
+        seller_id: so ? so.id : o.seller_id,
+        seller_name: so ? so.name : o.seller_name,
+        seller_code: so ? so.code : o.seller_code,
+      };
+    });
     if (statusFilter !== "all") {
       result = result.filter((o) => o.status === statusFilter);
     }
@@ -57,7 +74,7 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
       );
     }
     return result;
-  }, [data, statusFilter, eventFilter, search, emailOverrides]);
+  }, [data, statusFilter, eventFilter, search, emailOverrides, sellerOverrides]);
 
   const counts = useMemo(() => {
     return {
@@ -73,27 +90,9 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Status filter pills */}
-      <div className="flex flex-wrap gap-1.5">
-        {STATUS_FILTERS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setStatusFilter(key)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              statusFilter === key
-                ? "bg-navy-700 text-white"
-                : "border border-navy-200 text-navy-600 hover:bg-navy-50"
-            }`}
-          >
-            {label}
-            <span className="ml-1 opacity-70">{counts[key]}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Search + event filter */}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
+      {/* Filters: search + status + event — all in one wrap row */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div className="relative min-w-[200px] flex-1">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-400"
@@ -116,18 +115,26 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <select
-          className="input-field sm:max-w-xs"
+
+        <FilterSelect
+          label="Estado"
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as StatusKey)}
+          options={STATUS_FILTERS.map((s) => ({
+            value: s.key,
+            label: `${s.label} (${counts[s.key]})`,
+          }))}
+        />
+
+        <FilterSelect
+          label="Evento"
           value={eventFilter}
-          onChange={(e) => setEventFilter(e.target.value)}
-        >
-          <option value="all">Todos los eventos</option>
-          {events.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
+          onChange={setEventFilter}
+          options={[
+            { value: "all", label: "Todos" },
+            ...events.map(([id, name]) => ({ value: id, label: name })),
+          ]}
+        />
       </div>
 
       <p className="text-xs text-navy-400">
@@ -141,8 +148,19 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
             key={o.id}
             order={o}
             isAdmin={isAdmin}
+            sellers={sellers}
             onEmailSaved={(email) =>
               setEmailOverrides((prev) => ({ ...prev, [o.id]: email }))
+            }
+            onSellerSaved={(seller) =>
+              setSellerOverrides((prev) => ({
+                ...prev,
+                [o.id]: {
+                  id: seller?.id || null,
+                  name: seller?.full_name || null,
+                  code: seller?.seller_code || null,
+                },
+              }))
             }
           />
         ))}
@@ -159,13 +177,19 @@ export default function EventsOrdersTab({ data, isAdmin }: Props) {
 function OrderCard({
   order,
   isAdmin,
+  sellers,
   onEmailSaved,
+  onSellerSaved,
 }: {
   order: EventOrderRow;
   isAdmin: boolean;
+  sellers: SellerOption[];
   onEmailSaved: (email: string) => void;
+  onSellerSaved: (seller: SellerOption | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
   const totalQty = order.items.reduce((s, i) => s + i.quantity, 0);
   const dateStr = new Date(order.created_at).toLocaleDateString("es-AR", {
     day: "2-digit",
@@ -173,6 +197,20 @@ function OrderCard({
     hour: "2-digit",
     minute: "2-digit",
   });
+  // Lazy-load the signed receipt URL when the card expands
+  useEffect(() => {
+    if (!expanded || !order.receipt_filename || receiptUrl || receiptLoading) {
+      return;
+    }
+    setReceiptLoading(true);
+    fetch(`/api/admin/orders/${order.id}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.receipt_signed_url) setReceiptUrl(j.receipt_signed_url);
+      })
+      .catch(() => {})
+      .finally(() => setReceiptLoading(false));
+  }, [expanded, order.id, order.receipt_filename, receiptUrl, receiptLoading]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-navy-100 bg-white shadow-sm">
@@ -229,20 +267,21 @@ function OrderCard({
             </div>
           </div>
 
-          {/* Seller */}
-          {order.seller_name && (
-            <div>
-              <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
-                Vendedor
-              </p>
-              <p className="text-sm text-navy-700">{order.seller_name}</p>
-              {order.seller_code && (
-                <p className="font-mono text-[10px] text-navy-400">
-                  {order.seller_code}
-                </p>
-              )}
-            </div>
-          )}
+          {/* Seller — picker for admin, display for others */}
+          <div>
+            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
+              Vendedor
+            </p>
+            <SellerPickerCell
+              currentSellerId={order.seller_id}
+              currentSellerName={order.seller_name}
+              currentSellerCode={order.seller_code}
+              sellers={sellers}
+              endpoint={`/api/admin/orders/${order.id}/seller`}
+              disabled={!isAdmin}
+              onSaved={onSellerSaved}
+            />
+          </div>
 
           {/* Items */}
           <div>
@@ -273,7 +312,39 @@ function OrderCard({
 
           {/* Receipt */}
           {order.receipt_filename && (
-            <p className="text-navy-500">📎 {order.receipt_filename}</p>
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-navy-400">
+                Comprobante
+              </p>
+              {receiptUrl ? (
+                <a
+                  href={receiptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                >
+                  📎 {order.receipt_filename}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-3 w-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                </a>
+              ) : receiptLoading ? (
+                <p className="text-[11px] text-navy-400">Cargando...</p>
+              ) : (
+                <p className="text-[11px] text-navy-400">📎 {order.receipt_filename}</p>
+              )}
+            </div>
           )}
 
           {/* Rejection reason */}
