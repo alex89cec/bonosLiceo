@@ -197,9 +197,6 @@ function OrderCard({
     hour: "2-digit",
     minute: "2-digit",
   });
-  const isImageReceipt =
-    order.receipt_filename?.match(/\.(jpe?g|png|webp|gif)$/i) != null;
-
   // Lazy-load the signed receipt URL when the card expands
   useEffect(() => {
     if (!expanded || !order.receipt_filename || receiptUrl || receiptLoading) {
@@ -320,46 +317,28 @@ function OrderCard({
                 Comprobante
               </p>
               {receiptUrl ? (
-                <>
-                  <a
-                    href={receiptUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                <a
+                  href={receiptUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                >
+                  📎 {order.receipt_filename}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-3 w-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
                   >
-                    📎 {order.receipt_filename}
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-3 w-3"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                  </a>
-                  {/* Inline preview for images */}
-                  {isImageReceipt && (
-                    <a
-                      href={receiptUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 block overflow-hidden rounded-xl border border-navy-100 transition-shadow hover:shadow-md"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={receiptUrl}
-                        alt="Comprobante"
-                        className="max-h-72 w-full object-contain bg-navy-50"
-                      />
-                    </a>
-                  )}
-                </>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                </a>
               ) : receiptLoading ? (
                 <p className="text-[11px] text-navy-400">Cargando...</p>
               ) : (
