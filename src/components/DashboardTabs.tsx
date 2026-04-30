@@ -207,6 +207,8 @@ function EventosTab({
   events: AssignedEvent[];
   stats: EventsStats;
 }) {
+  const canScanAny = events.some((e) => e.can_scan);
+
   return (
     <div className="space-y-4">
       {/* Stats */}
@@ -230,6 +232,53 @@ function EventosTab({
           <p className="text-[10px] text-navy-400">Cobrado</p>
         </div>
       </div>
+
+      {/* Scanner CTA — only for users with can_scan on at least one event */}
+      {canScanAny && (
+        <a
+          href="/scanner"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-navy-700 bg-navy-700 px-4 py-3 text-white shadow-md transition-all hover:bg-navy-800"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-500 text-navy-900">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold">Escanear entradas</p>
+              <p className="text-[11px] text-navy-200">
+                Validar QRs en la puerta
+              </p>
+            </div>
+          </div>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5 text-navy-300"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </a>
+      )}
 
       {/* Events */}
       <div>
