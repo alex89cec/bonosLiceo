@@ -1215,15 +1215,22 @@ function SellersTab({
     }
   }
 
-  async function assign(sellerId: string, canSell: boolean, canScan: boolean) {
+  async function assignMany(
+    sellerIds: string[],
+    canSell: boolean,
+    canScan: boolean,
+  ) {
+    if (sellerIds.length === 0) return;
     try {
       const res = await fetch(`/api/events/${eventId}/sellers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          seller_id: sellerId,
-          can_sell: canSell,
-          can_scan: canScan,
+          assignments: sellerIds.map((seller_id) => ({
+            seller_id,
+            can_sell: canSell,
+            can_scan: canScan,
+          })),
         }),
       });
       const json = await res.json();
@@ -1254,7 +1261,7 @@ function SellersTab({
         <AssignSellerForm
           candidates={unassigned}
           onCancel={() => setShowForm(false)}
-          onAssign={assign}
+          onAssignMany={assignMany}
         />
       )}
 
@@ -1321,14 +1328,14 @@ function SellersTab({
 
 function AssignSellerForm({
   candidates,
-  onAssign,
+  onAssignMany,
   onCancel,
 }: {
   candidates: { id: string; full_name: string; email: string; seller_code: string | null }[];
-  onAssign: (sellerId: string, canSell: boolean, canScan: boolean) => void;
+  onAssignMany: (sellerIds: string[], canSell: boolean, canScan: boolean) => void;
   onCancel: () => void;
 }) {
-  const [sellerId, setSellerId] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [canSell, setCanSell] = useState(true);
   const [canScan, setCanScan] = useState(false);
   const [search, setSearch] = useState("");
@@ -1342,6 +1349,30 @@ function AssignSellerForm({
       )
     : candidates;
 
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((c) => selected.has(c.id));
+
+  function toggleAllFiltered() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        for (const c of filtered) next.delete(c.id);
+      } else {
+        for (const c of filtered) next.add(c.id);
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="card space-y-3 border-gold-200 bg-gold-50/30">
       <input
@@ -1352,49 +1383,77 @@ function AssignSellerForm({
         onChange={(e) => setSearch(e.target.value)}
       />
 
+      {/* Header bar: selection count + select-all of current filter */}
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-navy-500">
+          {selected.size > 0 ? (
+            <>
+              <strong className="text-navy-700">{selected.size}</strong>{" "}
+              seleccionados
+            </>
+          ) : (
+            <>
+              {filtered.length} disponible
+              {filtered.length === 1 ? "" : "s"}
+            </>
+          )}
+        </span>
+        {filtered.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleAllFiltered}
+            className="font-medium text-gold-600 hover:text-gold-700"
+          >
+            {allFilteredSelected ? "Deseleccionar todos" : "Seleccionar todos"}
+          </button>
+        )}
+      </div>
+
       <div className="max-h-64 overflow-y-auto rounded-xl border border-navy-100 bg-white">
         {filtered.length === 0 ? (
           <p className="p-4 text-center text-sm text-navy-400">Sin resultados</p>
         ) : (
-          filtered.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setSellerId(c.id)}
-              className={`flex w-full items-center gap-3 border-b border-navy-50 px-3 py-2 text-left transition-colors last:border-b-0 ${
-                sellerId === c.id ? "bg-gold-100" : "hover:bg-navy-50"
-              }`}
-            >
-              <div className="flex-1">
-                <p className="text-sm font-medium text-navy-700">{c.full_name}</p>
-                <p className="text-xs text-navy-400">{c.email}</p>
-              </div>
-              {c.seller_code && (
-                <span className="rounded bg-navy-50 px-2 py-0.5 font-mono text-xs text-navy-600">
-                  {c.seller_code}
-                </span>
-              )}
-            </button>
-          ))
+          filtered.map((c) => {
+            const isSelected = selected.has(c.id);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => toggle(c.id)}
+                className={`flex w-full items-center gap-3 border-b border-navy-50 px-3 py-2 text-left transition-colors last:border-b-0 ${
+                  isSelected ? "bg-gold-100" : "hover:bg-navy-50"
+                }`}
+              >
+                <SmallCheckbox checked={isSelected} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-navy-700">
+                    {c.full_name}
+                  </p>
+                  <p className="truncate text-xs text-navy-400">{c.email}</p>
+                </div>
+                {c.seller_code && (
+                  <span className="shrink-0 rounded bg-navy-50 px-2 py-0.5 font-mono text-xs text-navy-600">
+                    {c.seller_code}
+                  </span>
+                )}
+              </button>
+            );
+          })
         )}
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex gap-4">
         <label className="flex cursor-pointer items-center gap-1.5 text-sm">
-          <input
-            type="checkbox"
+          <SmallCheckbox
             checked={canSell}
-            onChange={(e) => setCanSell(e.target.checked)}
-            className="h-4 w-4 accent-gold-500"
+            onChange={(v) => setCanSell(v)}
           />
           <span className="font-medium text-navy-700">Puede vender</span>
         </label>
         <label className="flex cursor-pointer items-center gap-1.5 text-sm">
-          <input
-            type="checkbox"
+          <SmallCheckbox
             checked={canScan}
-            onChange={(e) => setCanScan(e.target.checked)}
-            className="h-4 w-4 accent-gold-500"
+            onChange={(v) => setCanScan(v)}
           />
           <span className="font-medium text-navy-700">Puede escanear</span>
         </label>
@@ -1403,15 +1462,65 @@ function AssignSellerForm({
       <div className="flex gap-2">
         <button
           className="btn-gold flex-1 text-sm"
-          disabled={!sellerId}
-          onClick={() => onAssign(sellerId, canSell, canScan)}
+          disabled={selected.size === 0}
+          onClick={() =>
+            onAssignMany(Array.from(selected), canSell, canScan)
+          }
         >
           Asignar
+          {selected.size > 0 && ` (${selected.size})`}
         </button>
         <button className="btn-secondary text-sm" onClick={onCancel}>
           Cancelar
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Small custom checkbox — 14×14 with a tighter check icon.
+ * Use either as a controlled input (pass onChange) or display-only
+ * (no onChange — clicks bubble up to the parent button).
+ */
+function SmallCheckbox({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange?: (v: boolean) => void;
+}) {
+  const interactive = typeof onChange === "function";
+  return (
+    <span
+      className={`inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
+        checked
+          ? "border-gold-500 bg-gold-500 text-white"
+          : "border-navy-300 bg-white"
+      }`}
+      onClick={(e) => {
+        if (interactive) {
+          e.preventDefault();
+          onChange!(!checked);
+        }
+      }}
+    >
+      {checked && (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-2.5 w-2.5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={3.5}
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M5 13l4 4L19 7"
+          />
+        </svg>
+      )}
+    </span>
   );
 }
