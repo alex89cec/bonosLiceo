@@ -1287,26 +1287,18 @@ function SellersTab({
                   )}
                   {s.profiles?.email}
                 </p>
-                <div className="mt-2 flex gap-3">
-                  <label className="flex cursor-pointer items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
+                <div className="mt-2 flex gap-4">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                    <SmallCheckbox
                       checked={s.can_sell}
-                      onChange={(e) =>
-                        toggleFlag(s.seller_id, "can_sell", e.target.checked)
-                      }
-                      className="h-3.5 w-3.5 accent-gold-500"
+                      onChange={(v) => toggleFlag(s.seller_id, "can_sell", v)}
                     />
                     <span className="font-medium text-navy-700">Puede vender</span>
                   </label>
-                  <label className="flex cursor-pointer items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
+                  <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                    <SmallCheckbox
                       checked={s.can_scan}
-                      onChange={(e) =>
-                        toggleFlag(s.seller_id, "can_scan", e.target.checked)
-                      }
-                      className="h-3.5 w-3.5 accent-gold-500"
+                      onChange={(v) => toggleFlag(s.seller_id, "can_scan", v)}
                     />
                     <span className="font-medium text-navy-700">Puede escanear</span>
                   </label>
