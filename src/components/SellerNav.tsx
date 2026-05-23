@@ -4,7 +4,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 
-export default function SellerNav({ isAdmin }: { isAdmin: boolean }) {
+export default function SellerNav({
+  isAdmin,
+  canScan = false,
+}: {
+  isAdmin: boolean;
+  canScan?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -45,8 +51,20 @@ export default function SellerNav({ isAdmin }: { isAdmin: boolean }) {
           {/* Center: Title */}
           <h1 className="text-base font-bold text-navy-700">Panel Vendedor</h1>
 
-          {/* Right: Profile + Admin + Logout */}
+          {/* Right: Scanner + Profile + Admin + Logout */}
           <div className="flex items-center gap-1">
+            {canScan && (
+              <a
+                href="/scanner"
+                title="Escanear entradas"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-navy-400 transition-colors hover:bg-navy-50 hover:text-navy-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+                <span className="hidden sm:inline">Escanear</span>
+              </a>
+            )}
             <a
               href="/seller/profile"
               title="Mi perfil"

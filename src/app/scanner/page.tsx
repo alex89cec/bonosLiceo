@@ -15,6 +15,12 @@ interface ScannableEvent {
 interface ScanResultData {
   result: "valid" | "already_used" | "invalid" | "wrong_event" | "cancelled";
   ticket?: {
+    ticket_id?: string;
+    short_id?: string;
+    order_id?: string | null;
+    created_at?: string;
+    amount_paid?: number | null;
+    is_complimentary?: boolean;
     buyer_name: string | null;
     buyer_email?: string | null;
     type_name: string;
@@ -171,12 +177,14 @@ export default function ScannerPage() {
     };
   }, [selectedEventId, submitScan]);
 
-  // Auto-clear result after 3 seconds
+  // Auto-clear result. Test mode gets longer so admin can read the
+  // extended verification details. Tap the overlay to dismiss early.
   useEffect(() => {
     if (!result) return;
-    const t = setTimeout(() => setResult(null), 3500);
+    const ms = testMode ? 6500 : 3500;
+    const t = setTimeout(() => setResult(null), ms);
     return () => clearTimeout(t);
-  }, [result]);
+  }, [result, testMode]);
 
   if (eventsLoading) {
     return (
@@ -380,7 +388,13 @@ export default function ScannerPage() {
       </div>
 
       {/* Result overlay */}
-      {result && <ResultOverlay result={result} testMode={testMode} />}
+      {result && (
+        <ResultOverlay
+          result={result}
+          testMode={testMode}
+          onDismiss={() => setResult(null)}
+        />
+      )}
     </div>
   );
 }
@@ -388,16 +402,19 @@ export default function ScannerPage() {
 function ResultOverlay({
   result,
   testMode,
+  onDismiss,
 }: {
   result: ScanResultData;
   testMode: boolean;
+  onDismiss: () => void;
 }) {
   const cfg = STATUS_CONFIG[result.result];
   const t = result.ticket;
 
   return (
     <div
-      className={`fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md rounded-t-3xl ${cfg.bg} ${cfg.text} shadow-2xl`}
+      onClick={onDismiss}
+      className={`fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md cursor-pointer rounded-t-3xl ${cfg.bg} ${cfg.text} shadow-2xl`}
     >
       <div className="px-6 py-5 text-center">
         <div className="mb-2 text-4xl">{cfg.emoji}</div>
@@ -420,7 +437,11 @@ function ResultOverlay({
                   · 📦 {t.parent_bundle_name}
                 </span>
               )}
+              {t.is_complimentary && (
+                <span className="ml-1 text-xs opacity-80">· 🎁 Cortesía</span>
+              )}
             </p>
+
             {result.result === "already_used" && t.entered_at && (
               <p className="mt-2 text-xs opacity-80">
                 Ingresó:{" "}
@@ -443,8 +464,46 @@ function ResultOverlay({
                 Estado: <strong>{t.status}</strong>
               </p>
             )}
+
+            {/* Extended verification details (mainly useful in test mode) */}
+            {testMode && (
+              <div className="mt-3 rounded-xl bg-black/15 px-3 py-2 text-left text-[11px] leading-relaxed">
+                {t.buyer_email && (
+                  <p>
+                    <span className="opacity-70">Email: </span>
+                    <span className="break-all font-medium">{t.buyer_email}</span>
+                  </p>
+                )}
+                {typeof t.amount_paid === "number" && t.amount_paid > 0 && (
+                  <p>
+                    <span className="opacity-70">Pagado: </span>
+                    <span className="font-medium">
+                      ${t.amount_paid.toLocaleString("es-AR")}
+                    </span>
+                  </p>
+                )}
+                {t.short_id && (
+                  <p>
+                    <span className="opacity-70">ID: </span>
+                    <span className="font-mono">{t.short_id}</span>
+                  </p>
+                )}
+                {t.created_at && (
+                  <p>
+                    <span className="opacity-70">Emitida: </span>
+                    {new Date(t.created_at).toLocaleString("es-AR", {
+                      day: "2-digit",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
+        <p className="mt-3 text-[10px] opacity-60">Toca para cerrar</p>
       </div>
     </div>
   );

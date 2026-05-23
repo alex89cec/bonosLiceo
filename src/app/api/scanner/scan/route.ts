@@ -102,7 +102,8 @@ export async function POST(request: NextRequest) {
       .from("event_tickets")
       .select(
         `
-        id, event_id, status, entered_at, entered_by,
+        id, event_id, status, entered_at, entered_by, amount_paid,
+        is_complimentary, order_id, created_at,
         ticket_type:ticket_type_id (name, color),
         parent_bundle:parent_bundle_type_id (name),
         buyers:buyer_id (full_name, email),
@@ -136,6 +137,23 @@ export async function POST(request: NextRequest) {
       | { name: string }
       | null;
 
+    // Base ticket info — included in every response so the scanner overlay
+    // (especially in test mode) can show full details for verification.
+    const baseTicketInfo = {
+      ticket_id: ticket.id as string,
+      short_id: (ticket.id as string).slice(0, 8).toUpperCase(),
+      order_id: (ticket.order_id as string | null) ?? null,
+      created_at: ticket.created_at as string,
+      amount_paid:
+        ticket.amount_paid !== null ? Number(ticket.amount_paid) : null,
+      is_complimentary: Boolean(ticket.is_complimentary),
+      buyer_name: buyer?.full_name || null,
+      buyer_email: buyer?.email || null,
+      type_name: ticketType?.name || "Entrada",
+      type_color: ticketType?.color || null,
+      parent_bundle_name: parentBundle?.name || null,
+    };
+
     // Wrong event?
     if (ticket.event_id !== event_id) {
       await service.from("event_scan_logs").insert({
@@ -152,11 +170,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         result: "wrong_event" satisfies ScanResult,
         ticket: {
-          buyer_name: buyer?.full_name || null,
-          buyer_email: buyer?.email || null,
-          type_name: ticketType?.name || "Entrada",
-          type_color: ticketType?.color || null,
-          parent_bundle_name: parentBundle?.name || null,
+          ...baseTicketInfo,
           actual_event_name: ticketEvent?.name || null,
         },
       });
@@ -174,11 +188,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         result: "cancelled" satisfies ScanResult,
         ticket: {
-          buyer_name: buyer?.full_name || null,
-          buyer_email: buyer?.email || null,
-          type_name: ticketType?.name || "Entrada",
-          type_color: ticketType?.color || null,
-          parent_bundle_name: parentBundle?.name || null,
+          ...baseTicketInfo,
           status: ticket.status as string,
         },
       });
@@ -209,11 +219,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         result: "already_used" satisfies ScanResult,
         ticket: {
-          buyer_name: buyer?.full_name || null,
-          buyer_email: buyer?.email || null,
-          type_name: ticketType?.name || "Entrada",
-          type_color: ticketType?.color || null,
-          parent_bundle_name: parentBundle?.name || null,
+          ...baseTicketInfo,
           entered_at: ticket.entered_at as string | null,
           entered_by_name: enteredByName,
         },
@@ -242,13 +248,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       result: "valid" satisfies ScanResult,
-      ticket: {
-        buyer_name: buyer?.full_name || null,
-        buyer_email: buyer?.email || null,
-        type_name: ticketType?.name || "Entrada",
-        type_color: ticketType?.color || null,
-        parent_bundle_name: parentBundle?.name || null,
-      },
+      ticket: baseTicketInfo,
       mode,
     });
   } catch (err) {
