@@ -174,6 +174,40 @@ export interface EventReportRow {
   types: EventReportTypeBreakdown[];
 }
 
+export interface EventLiveTypeBreakdown {
+  id: string;
+  name: string;
+  color: string | null;
+  total: number;
+  scanned: number;
+  remaining: number;
+}
+
+export interface EventLiveBundleBreakdown {
+  id: string;
+  name: string;
+  /** People per pack (sum of bundle_items quantities, e.g. 2A + 2M = 4) */
+  pack_size: number;
+  /** How many packs were sold (= number of aggregator tickets) */
+  packs_sold: number;
+  /** How many of those packs were already scanned at the door */
+  packs_scanned: number;
+}
+
+export interface EventLiveRow {
+  id: string;
+  name: string;
+  slug: string;
+  event_date: string;
+  venue: string | null;
+  total_people: number;
+  scanned: number;
+  remaining: number;
+  last_scan_at: string | null;
+  types: EventLiveTypeBreakdown[];
+  bundles: EventLiveBundleBreakdown[];
+}
+
 export interface EventOrderItem {
   ticket_type_id: string;
   name: string;
