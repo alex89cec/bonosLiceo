@@ -8,6 +8,7 @@ import GroupReportTab from "@/components/reports/GroupReportTab";
 import BonosDetailTab from "@/components/reports/BonosDetailTab";
 import EventsSummaryTab from "@/components/reports/EventsSummaryTab";
 import EventsListTab from "@/components/reports/EventsListTab";
+import EventsLiveTab from "@/components/reports/EventsLiveTab";
 import EventsOrdersTab from "@/components/reports/EventsOrdersTab";
 import EventsSellersTab from "@/components/reports/EventsSellersTab";
 import EventsDetailTab from "@/components/reports/EventsDetailTab";
@@ -20,6 +21,7 @@ import type {
   BonosDetailRow,
   EventsSummary,
   EventReportRow,
+  EventLiveRow,
   EventOrderRow,
   EventsSellerReport,
   EventTicketDetailRow,
@@ -39,6 +41,7 @@ const RIFAS_TABS = [
 ] as const;
 
 const EVENTOS_TABS = [
+  { key: "events-live", label: "🔴 En vivo" },
   { key: "events-summary", label: "Resumen" },
   { key: "events-list", label: "Eventos" },
   { key: "events-orders", label: "Órdenes" },
@@ -94,6 +97,10 @@ export default function ReportsPage() {
     null,
   );
   const [eventsList, setEventsList] = useState<EventReportRow[] | null>(null);
+  const [eventsLive, setEventsLive] = useState<EventLiveRow[] | null>(null);
+  const [eventsLiveFetchedAt, setEventsLiveFetchedAt] = useState<number>(
+    Date.now(),
+  );
   const [eventsOrders, setEventsOrders] = useState<EventOrderRow[] | null>(
     null,
   );
@@ -161,6 +168,10 @@ export default function ReportsPage() {
           case "events-list":
             setEventsList(data);
             break;
+          case "events-live":
+            setEventsLive(data);
+            setEventsLiveFetchedAt(Date.now());
+            break;
           case "events-orders":
             setEventsOrders(data);
             break;
@@ -215,6 +226,9 @@ export default function ReportsPage() {
         break;
       case "events-list":
         setEventsList(null);
+        break;
+      case "events-live":
+        // Don't blank — refresh button uses in-place loading instead.
         break;
       case "events-orders":
         setEventsOrders(null);
@@ -283,8 +297,10 @@ export default function ReportsPage() {
             })}
           </div>
 
-          {/* Status filter — native select for compact + great mobile UX */}
-          <div className="flex items-center gap-2 pb-2">
+          {/* Status filter — hidden for events-live (always active). */}
+          <div
+            className={`flex items-center gap-2 pb-2 ${activeTab === "events-live" ? "hidden" : ""}`}
+          >
             <label
               htmlFor="status-filter"
               className="text-xs font-medium text-navy-400"
@@ -323,8 +339,9 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Loading */}
-      {loading && (
+      {/* Loading — events-live keeps its previous data visible so the
+          refresh button is a live update, not a flash of skeleton. */}
+      {loading && !(activeTab === "events-live" && eventsLive) && (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold-200 border-t-gold-500" />
         </div>
@@ -338,7 +355,7 @@ export default function ReportsPage() {
       )}
 
       {/* Content */}
-      {!loading && !error && (
+      {!error && (!loading || (activeTab === "events-live" && eventsLive)) && (
         <>
           {activeTab === "summary" && summaryData && (
             <SummaryTab data={summaryData} />
@@ -365,6 +382,14 @@ export default function ReportsPage() {
           )}
           {activeTab === "events-list" && eventsList && (
             <EventsListTab data={eventsList} />
+          )}
+          {activeTab === "events-live" && eventsLive && (
+            <EventsLiveTab
+              data={eventsLive}
+              lastFetchedAt={eventsLiveFetchedAt}
+              refreshing={loading}
+              onRefresh={() => fetchData("events-live", "active")}
+            />
           )}
           {activeTab === "events-orders" && eventsOrders && (
             <EventsOrdersTab

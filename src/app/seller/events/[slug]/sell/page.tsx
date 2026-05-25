@@ -19,6 +19,7 @@ export default function SellerSellEventPage() {
   /** stockMap[id] is the remaining quantity, or null for unlimited */
   const [stockMap, setStockMap] = useState<Record<string, number | null>>({});
   const [sellerCode, setSellerCode] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [initLoading, setInitLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
 
@@ -45,10 +46,11 @@ export default function SellerSellEventPage() {
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("seller_code")
+          .select("seller_code, role")
           .eq("id", user.id)
           .single();
         setSellerCode(profile?.seller_code || null);
+        setIsAdmin(profile?.role === "admin");
       }
 
       const { data: ev } = await supabase
@@ -128,21 +130,39 @@ export default function SellerSellEventPage() {
   }, [slug]);
 
   const totalQty = Object.values(quantities).reduce((s, q) => s + q, 0);
-  const totalAmount = Object.entries(quantities).reduce((sum, [tid, qty]) => {
-    const t = types.find((x) => x.id === tid);
-    return sum + (t ? Number(t.price) * qty : 0);
-  }, 0);
+  // A complimentary order has *every* selected type marked is_complimentary.
+  // Paid and complimentary types can't be mixed in one order (see setQty).
+  const isCortesia =
+    totalQty > 0 &&
+    Object.keys(quantities).every((tid) => {
+      const t = types.find((x) => x.id === tid);
+      return Boolean(t?.is_complimentary);
+    });
+  const totalAmount = isCortesia
+    ? 0
+    : Object.entries(quantities).reduce((sum, [tid, qty]) => {
+        const t = types.find((x) => x.id === tid);
+        return sum + (t ? Number(t.price) * qty : 0);
+      }, 0);
 
   function setQty(typeId: string, q: number) {
     const stock = stockMap[typeId];
     // stock null = unlimited; cap at 50 per order to avoid abuse
     const max = stock === null ? 50 : (stock ?? 0);
     const clamped = Math.max(0, Math.min(q, max));
+    const target = types.find((x) => x.id === typeId);
+    const targetIsCortesia = Boolean(target?.is_complimentary);
     setQuantities((prev) => {
-      const next = { ...prev };
-      if (clamped === 0) delete next[typeId];
-      else next[typeId] = clamped;
-      return next;
+      // If toggling between paid and cortesia families, drop the other side.
+      const filtered: Record<string, number> = {};
+      for (const [tid, q2] of Object.entries(prev)) {
+        const tt = types.find((x) => x.id === tid);
+        const tIsCortesia = Boolean(tt?.is_complimentary);
+        if (tIsCortesia === targetIsCortesia) filtered[tid] = q2;
+      }
+      if (clamped === 0) delete filtered[typeId];
+      else filtered[typeId] = clamped;
+      return filtered;
     });
   }
 
@@ -162,14 +182,16 @@ export default function SellerSellEventPage() {
         buyer_name: buyerName,
         buyer_phone: buyerPhone || null,
         items,
-        payment_method: "transferencia",
-        is_preventa: receiptMode === "preventa",
+        payment_method: isCortesia ? "cortesia" : "transferencia",
+        is_preventa: !isCortesia && receiptMode === "preventa",
         notes: notes || null,
       };
 
       const formData = new FormData();
       formData.append("data", JSON.stringify(data));
-      if (receipt && receiptMode === "now") formData.append("receipt", receipt);
+      if (!isCortesia && receipt && receiptMode === "now") {
+        formData.append("receipt", receipt);
+      }
 
       const res = await fetch(`/api/events/${event.id}/orders`, {
         method: "POST",
@@ -202,7 +224,7 @@ export default function SellerSellEventPage() {
     return (
       <div className="py-12 text-center">
         <p className="text-sm text-red-600">{initError}</p>
-        <Link href="/seller/events" className="btn-secondary mt-4 inline-block">
+        <Link href="/seller/dashboard" className="btn-secondary mt-4 inline-block">
           Volver
         </Link>
       </div>
@@ -214,7 +236,7 @@ export default function SellerSellEventPage() {
     return (
       <div>
         <Link
-          href="/seller/events"
+          href="/seller/dashboard"
           className="mb-3 inline-flex items-center gap-1 text-sm text-navy-400 hover:text-navy-700"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -257,7 +279,10 @@ export default function SellerSellEventPage() {
             </p>
           )}
           {types
-            .filter((t) => !t.is_complimentary && !t.is_bundle_only)
+            .filter(
+              (t) =>
+                (isAdmin || !t.is_complimentary) && !t.is_bundle_only,
+            )
             .map((t) => {
               const qty = quantities[t.id] || 0;
               const stock = stockMap[t.id];
@@ -273,14 +298,24 @@ export default function SellerSellEventPage() {
                     })
                     .join(" + ")
                 : null;
+              const isCortesiaType = Boolean(t.is_complimentary);
 
               return (
-                <div key={t.id} className="card">
+                <div
+                  key={t.id}
+                  className={`card ${isCortesiaType ? "border-2 border-purple-300 bg-purple-50/30" : ""}`}
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-navy-700">
+                        {isCortesiaType && "🎁 "}
                         {isBundle && "📦 "}
                         {t.name}
+                        {isCortesiaType && (
+                          <span className="ml-2 rounded-full bg-purple-200 px-2 py-0.5 text-[10px] font-bold uppercase text-purple-800">
+                            Cortesía
+                          </span>
+                        )}
                       </p>
                       {t.description && (
                         <p className="text-xs text-navy-400">{t.description}</p>
@@ -291,9 +326,13 @@ export default function SellerSellEventPage() {
                         </p>
                       )}
                       <p className="mt-1 text-sm">
-                        <span className="font-bold text-gold-600">
-                          {formatCurrency(t.price)}
-                        </span>
+                        {isCortesiaType ? (
+                          <span className="font-bold text-purple-700">Sin cargo</span>
+                        ) : (
+                          <span className="font-bold text-gold-600">
+                            {formatCurrency(t.price)}
+                          </span>
+                        )}
                         <span className="ml-2 text-xs text-navy-400">
                           {soldOut
                             ? "Agotado"
@@ -331,7 +370,7 @@ export default function SellerSellEventPage() {
             <div className="card mb-3 flex items-center justify-between">
               <span className="text-sm text-navy-400">Total</span>
               <span className="text-xl font-bold text-navy-700">
-                {formatCurrency(totalAmount)}
+                {isCortesia ? "Sin cargo (cortesía)" : formatCurrency(totalAmount)}
               </span>
             </div>
             <button className="btn-gold w-full" onClick={() => setStep("buyer")}>
@@ -410,14 +449,26 @@ export default function SellerSellEventPage() {
         <button
           className="btn-gold mt-4 w-full"
           disabled={
+            submitting ||
             !buyerEmail ||
             !buyerName ||
             !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)
           }
-          onClick={() => setStep("receipt")}
+          onClick={() => {
+            // Cortesía orders skip the receipt step — submit directly.
+            if (isCortesia) submit();
+            else setStep("receipt");
+          }}
         >
-          Continuar
+          {isCortesia
+            ? submitting
+              ? "Emitiendo cortesía..."
+              : "Emitir cortesía"
+            : "Continuar"}
         </button>
+        {submitError && (
+          <p className="mt-2 text-sm text-red-600">{submitError}</p>
+        )}
       </div>
     );
   }
@@ -586,12 +637,18 @@ export default function SellerSellEventPage() {
         </svg>
       </div>
       <h2 className="mb-1 text-xl font-bold text-navy-700">
-        {receiptMode === "preventa" ? "Preventa creada" : "Orden enviada"}
+        {isCortesia
+          ? "Cortesía emitida"
+          : receiptMode === "preventa"
+            ? "Preventa creada"
+            : "Orden enviada"}
       </h2>
       <p className="mb-6 text-sm text-navy-400">
-        {receiptMode === "preventa"
-          ? `Le enviamos un email a ${buyerEmail} con los datos de transferencia. Cuando recibas el comprobante, cargalo desde tu lista de órdenes.`
-          : "El administrador va a revisar el comprobante. Cuando se apruebe, el comprador recibirá las entradas por email."}
+        {isCortesia
+          ? `Las entradas se aprobaron automáticamente. El comprador (${buyerEmail}) ya recibió los QRs por email.`
+          : receiptMode === "preventa"
+            ? `Le enviamos un email a ${buyerEmail} con los datos de transferencia. Cuando recibas el comprobante, cargalo desde tu lista de órdenes.`
+            : "El administrador va a revisar el comprobante. Cuando se apruebe, el comprador recibirá las entradas por email."}
       </p>
 
       <div className="flex gap-3">
@@ -613,7 +670,7 @@ export default function SellerSellEventPage() {
         >
           Vender otra
         </button>
-        <Link href="/seller/events" className="btn-primary flex-1 text-center">
+        <Link href="/seller/dashboard" className="btn-primary flex-1 text-center">
           Volver
         </Link>
       </div>

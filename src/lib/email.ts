@@ -522,6 +522,9 @@ export interface ApprovedTicketsEmailData {
     typeColor: string | null;
     amountPaid: number | null;
     bundleParentName: string | null;
+    isAggregator?: boolean;
+    bundleSize?: number;
+    bundleLabel?: string | null;
   }[];
   isComplimentary: boolean;
 }
@@ -537,10 +540,17 @@ export async function sendApprovedTicketsEmail(
     hour: "2-digit",
     minute: "2-digit",
   });
-  const isSingle = data.tickets.length === 1;
-  const subject = isSingle
+  // Headcount = sum of bundleSize per QR (1 for regular, N for aggregator).
+  const totalPeople = data.tickets.reduce(
+    (s, t) => s + (t.bundleSize ?? 1),
+    0,
+  );
+  const totalQRs = data.tickets.length;
+  const hasAggregator = data.tickets.some((t) => t.isAggregator);
+  const isSinglePerson = totalPeople === 1;
+  const subject = isSinglePerson
     ? `Tu entrada — ${data.eventName}`
-    : `Tus ${data.tickets.length} entradas — ${data.eventName}`;
+    : `Tus ${totalPeople} entradas — ${data.eventName}`;
 
   // Generate QR codes and inline-attach them as CIDs
   const qrAttachments: { filename: string; content: string; cid: string }[] = [];
@@ -550,7 +560,6 @@ export async function sendApprovedTicketsEmail(
     const t = data.tickets[i];
     const cid = `qr-${i}@bonosliceo`;
     const dataUri = await qrAsDataUri(t.qrToken);
-    // Strip the base64 prefix; Resend wants raw base64 in `content`
     const base64 = dataUri.replace(/^data:image\/png;base64,/, "");
     qrAttachments.push({
       filename: `entrada-${i + 1}.png`,
@@ -562,16 +571,26 @@ export async function sendApprovedTicketsEmail(
       ? `<span style="display:inline-block;background:#ede9fe;color:#5b21b6;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:6px;">📦 ${t.bundleParentName}</span>`
       : "";
 
+    const aggregatorBanner = t.isAggregator
+      ? `<div style="background:#ede9fe;border-radius:10px;padding:10px;margin:6px 0 12px;">
+            <p style="margin:0;color:#5b21b6;font-size:14px;font-weight:700;">
+              📦 Válido para ${t.bundleSize} personas
+            </p>
+            ${t.bundleLabel ? `<p style="margin:2px 0 0;color:#7c3aed;font-size:11px;">${t.bundleLabel}</p>` : ""}
+          </div>`
+      : "";
+
     ticketCards.push(`
       <div style="border:2px dashed #e2e8f0;border-radius:14px;padding:20px;margin:14px 0;text-align:center;background:#ffffff;">
         <div style="text-align:center;">
           <p style="margin:0 0 4px;font-size:11px;color:#94a3b8;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;">
-            Entrada ${i + 1} de ${data.tickets.length}
+            QR ${i + 1} de ${totalQRs}
           </p>
           <p style="margin:0 0 10px;font-size:16px;color:#1e293b;font-weight:700;">
             ${t.typeName}${bundleBadge}
           </p>
-          <img src="cid:${cid}" alt="QR Entrada ${i + 1}" width="220" height="220" style="display:inline-block;border:1px solid #e2e8f0;border-radius:8px;background:#fff;" />
+          ${aggregatorBanner}
+          <img src="cid:${cid}" alt="QR ${i + 1}" width="220" height="220" style="display:inline-block;border:1px solid #e2e8f0;border-radius:8px;background:#fff;" />
           <p style="margin:10px 0 0;font-size:10px;color:#94a3b8;font-family:monospace;word-break:break-all;">
             ID: ${t.id.slice(0, 8)}...
           </p>
@@ -588,7 +607,7 @@ export async function sendApprovedTicketsEmail(
   const html = emailLayout(`
     <h2 style="margin:0 0 8px;color:#1e293b;font-size:22px;">${greeting}</h2>
     <p style="color:#64748b;font-size:15px;line-height:1.6;">
-      ${data.isComplimentary ? "Recibiste una cortesía" : "Tu pago fue confirmado"} para <strong style="color:#1e293b;">${data.eventName}</strong>. ${isSingle ? "Tu entrada está lista" : `Tus ${data.tickets.length} entradas están listas`}.
+      ${data.isComplimentary ? "Recibiste una cortesía" : "Tu pago fue confirmado"} para <strong style="color:#1e293b;">${data.eventName}</strong>. ${isSinglePerson ? "Tu entrada está lista" : `Tienen lugar ${totalPeople} personas`}.
     </p>
 
     ${eventImageHtml}
@@ -605,8 +624,14 @@ export async function sendApprovedTicketsEmail(
     <!-- Instructions -->
     <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:16px 20px;margin:20px 0;text-align:center;">
       <p style="margin:0;font-size:14px;color:#78350f;line-height:1.5;">
-        🎟️ <strong>Presentá ${isSingle ? "este QR" : "los QRs"} en la entrada</strong><br>
-        <span style="font-size:12px;color:#a16207;">Cada persona necesita su propio QR. Imprimílos o mostralos desde el celular.</span>
+        🎟️ <strong>Presentá ${totalQRs === 1 ? "este QR" : "los QRs"} en la entrada</strong><br>
+        <span style="font-size:12px;color:#a16207;">
+          ${
+            hasAggregator
+              ? "Los packs entran con un solo QR — el escáner cuenta a todas las personas del pack."
+              : "Cada persona necesita su propio QR. Imprimílos o mostralos desde el celular."
+          }
+        </span>
       </p>
     </div>
 

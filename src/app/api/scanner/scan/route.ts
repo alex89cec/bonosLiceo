@@ -97,14 +97,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ result: "invalid" satisfies ScanResult });
     }
 
-    // Fetch the ticket with everything we need to display
+    // Fetch the ticket with everything we need to display.
+    // ticket_type.bundle_items lets us detect "aggregator" tickets — the
+    // single QR that represents a whole pack and stands in for N people.
     const { data: ticket } = await service
       .from("event_tickets")
       .select(
         `
         id, event_id, status, entered_at, entered_by, amount_paid,
         is_complimentary, order_id, created_at,
-        ticket_type:ticket_type_id (name, color),
+        ticket_type:ticket_type_id (id, name, color, bundle_items),
         parent_bundle:parent_bundle_type_id (name),
         buyers:buyer_id (full_name, email),
         events:event_id (name)
@@ -125,7 +127,12 @@ export async function POST(request: NextRequest) {
     }
 
     const ticketType = ticket.ticket_type as unknown as
-      | { name: string; color: string | null }
+      | {
+          id: string;
+          name: string;
+          color: string | null;
+          bundle_items: { ticket_type_id: string; quantity: number }[] | null;
+        }
       | null;
     const parentBundle = ticket.parent_bundle as unknown as
       | { name: string }
@@ -136,6 +143,36 @@ export async function POST(request: NextRequest) {
     const ticketEvent = ticket.events as unknown as
       | { name: string }
       | null;
+
+    // An "aggregator" ticket represents a whole pack (e.g. Pack Familiar):
+    // its single QR stands in for N component tickets the buyer didn't
+    // receive individually. Scanning it admits N people at once.
+    const isAggregator =
+      Array.isArray(ticketType?.bundle_items) &&
+      ticketType!.bundle_items!.length > 0;
+    const bundleSize = isAggregator
+      ? ticketType!.bundle_items!.reduce((s, c) => s + c.quantity, 0)
+      : 1;
+
+    // Human-readable component list for the door overlay, e.g. "2× General + 2× Menores".
+    let bundleComponentsLabel: string | null = null;
+    if (isAggregator) {
+      const componentTypeIds = ticketType!.bundle_items!.map(
+        (c) => c.ticket_type_id,
+      );
+      const { data: compTypes } = await service
+        .from("event_ticket_types")
+        .select("id, name")
+        .in("id", componentTypeIds);
+      const nameById = new Map(
+        (compTypes ?? []).map((t) => [t.id as string, t.name as string]),
+      );
+      bundleComponentsLabel = ticketType!
+        .bundle_items!.map(
+          (c) => `${c.quantity}× ${nameById.get(c.ticket_type_id) || "?"}`,
+        )
+        .join(" + ");
+    }
 
     // Base ticket info — included in every response so the scanner overlay
     // (especially in test mode) can show full details for verification.
@@ -152,6 +189,9 @@ export async function POST(request: NextRequest) {
       type_name: ticketType?.name || "Entrada",
       type_color: ticketType?.color || null,
       parent_bundle_name: parentBundle?.name || null,
+      is_aggregator: isAggregator,
+      bundle_size: bundleSize,
+      bundle_components_label: bundleComponentsLabel,
     };
 
     // Wrong event?
@@ -226,16 +266,44 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Valid! Mark as used (real mode only)
+    // Valid! Mark as used (real mode only). For aggregator tickets, also
+    // cascade the same update to bundle component rows so attendance
+    // stats reflect that N people actually walked in.
+    //
+    // Important: an order can have multiple aggregators of the same
+    // bundle type (e.g. someone bought 2 Pack Familiar). The N
+    // components per pack share order_id + parent_bundle_type_id, so
+    // we can't tell them apart — we just consume any bundle_size still-
+    // valid components from the pool. Each subsequent aggregator scan
+    // consumes its own bundle_size from what remains.
     if (mode === "real") {
+      const usedPayload = {
+        status: "used" as const,
+        entered_at: new Date().toISOString(),
+        entered_by: user.id,
+      };
       await service
         .from("event_tickets")
-        .update({
-          status: "used",
-          entered_at: new Date().toISOString(),
-          entered_by: user.id,
-        })
+        .update(usedPayload)
         .eq("id", ticket.id);
+
+      if (isAggregator && ticket.order_id && ticketType) {
+        const { data: toMark } = await service
+          .from("event_tickets")
+          .select("id")
+          .eq("order_id", ticket.order_id)
+          .eq("parent_bundle_type_id", ticketType.id)
+          .eq("status", "valid")
+          .order("created_at", { ascending: true })
+          .limit(bundleSize);
+        const ids = (toMark ?? []).map((r) => r.id as string);
+        if (ids.length > 0) {
+          await service
+            .from("event_tickets")
+            .update(usedPayload)
+            .in("id", ids);
+        }
+      }
     }
 
     await service.from("event_scan_logs").insert({

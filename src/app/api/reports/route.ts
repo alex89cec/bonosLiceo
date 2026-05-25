@@ -19,6 +19,9 @@ import type {
   EventsSellerReport,
   EventsSellerEventBreakdown,
   EventTicketDetailRow,
+  EventLiveRow,
+  EventLiveTypeBreakdown,
+  EventLiveBundleBreakdown,
 } from "@/types/reports";
 
 export async function GET(request: NextRequest) {
@@ -627,17 +630,21 @@ export async function GET(request: NextRequest) {
     // unless you specifically ask).
 
     if (tab.startsWith("events-")) {
-      // Fetch events filtered by status:
-      // - "all" → everything except `past` (mirrors how Bonos hides closed)
-      // - specific status → only that status
+      // Live tab only ever cares about active events (people about to walk
+      // in the door right now). Other tabs honour the status filter:
+      //  - "all" → everything except `past` (mirrors how Bonos hides closed)
+      //  - specific status → only that status
+      const effectiveStatusFilter =
+        tab === "events-live" ? "active" : statusFilter;
+
       let eventsQuery = supabase
         .from("events")
         .select("id, name, slug, status, event_date, venue");
 
-      if (statusFilter === "all") {
+      if (effectiveStatusFilter === "all") {
         eventsQuery = eventsQuery.neq("status", "past");
       } else {
-        eventsQuery = eventsQuery.eq("status", statusFilter);
+        eventsQuery = eventsQuery.eq("status", effectiveStatusFilter);
       }
 
       const { data: events } = await eventsQuery.order("event_date", {
@@ -660,7 +667,7 @@ export async function GET(request: NextRequest) {
             "id, event_id, buyer_id, seller_id, items, total_amount, payment_method, receipt_filename, status, rejection_reason, notes, created_at, reviewed_at",
           ),
         supabase.from("event_tickets").select(
-          "id, event_id, ticket_type_id, parent_bundle_type_id, status, order_id",
+          "id, event_id, ticket_type_id, parent_bundle_type_id, status, order_id, entered_at",
         ),
         supabase
           .from("event_ticket_types")
@@ -676,6 +683,22 @@ export async function GET(request: NextRequest) {
         eventIdsForReport.has(t.event_id as string),
       );
       const types = eventTypes || [];
+
+      // Aggregator types own a single QR that stands in for N component
+      // tickets. Their own ticket rows must NOT be counted as attendees —
+      // the components (with parent_bundle_type_id set) are the people.
+      const bundleTypeIds = new Set(
+        types
+          .filter(
+            (t) =>
+              Array.isArray(t.bundle_items) &&
+              (t.bundle_items as unknown[]).length > 0,
+          )
+          .map((t) => t.id as string),
+      );
+      const isPersonTicket = (t: { ticket_type_id: string; status: string }) =>
+        (t.status === "valid" || t.status === "used") &&
+        !bundleTypeIds.has(t.ticket_type_id);
       const buyersMapEv = new Map(
         (eventBuyers || []).map((b) => [
           b.id as string,
@@ -711,9 +734,7 @@ export async function GET(request: NextRequest) {
           complimentary_orders: orders.filter(
             (o) => o.status === "complimentary",
           ).length,
-          total_tickets_issued: tickets.filter(
-            (t) => t.status === "valid" || t.status === "used",
-          ).length,
+          total_tickets_issued: tickets.filter(isPersonTicket).length,
           total_amount_collected: orders
             .filter((o) => o.status === "approved")
             .reduce((s, o) => s + Number(o.total_amount || 0), 0),
@@ -726,6 +747,100 @@ export async function GET(request: NextRequest) {
             .reduce((s, o) => s + Number(o.total_amount || 0), 0),
         };
         return NextResponse.json(summary);
+      }
+
+      // events-live — door dashboard: how many people sold, scanned, and
+      // still to scan for each active event. Each refresh re-queries the
+      // tables, so the page updates as new sales come in or scans happen.
+      if (tab === "events-live") {
+        const result: EventLiveRow[] = eventsList.map((e) => {
+          const eventTks = tickets.filter((t) => t.event_id === e.id);
+          const eventTps = types.filter((t) => t.event_id === e.id);
+          const personTickets = eventTks.filter(isPersonTicket);
+          const scanned = personTickets.filter(
+            (t) => t.status === "used",
+          ).length;
+          const total = personTickets.length;
+          const remaining = total - scanned;
+
+          // Last scan timestamp across all person tickets of this event.
+          let lastScanAt: string | null = null;
+          for (const t of personTickets) {
+            const ts = t.entered_at as string | null;
+            if (!ts) continue;
+            if (!lastScanAt || ts > lastScanAt) lastScanAt = ts;
+          }
+
+          // Per-type breakdown: a person ticket is a component (count it
+          // under its own type, not the bundle type) or a non-bundle ticket.
+          const typesBreakdown: EventLiveTypeBreakdown[] = eventTps
+            .filter((t) => !bundleTypeIds.has(t.id as string))
+            .map((t) => {
+              const ofType = personTickets.filter(
+                (tk) => tk.ticket_type_id === t.id,
+              );
+              const tScanned = ofType.filter(
+                (tk) => tk.status === "used",
+              ).length;
+              return {
+                id: t.id as string,
+                name: t.name as string,
+                color: (t.color as string) || null,
+                total: ofType.length,
+                scanned: tScanned,
+                remaining: ofType.length - tScanned,
+              };
+            })
+            .filter((b) => b.total > 0)
+            .sort((a, b) => b.total - a.total);
+
+          // Bundles breakdown: an aggregator ticket is a row of the bundle
+          // type itself (no parent_bundle_type_id). One aggregator = one
+          // pack sold = one QR the buyer holds.
+          const bundlesBreakdown: EventLiveBundleBreakdown[] = eventTps
+            .filter((t) => bundleTypeIds.has(t.id as string))
+            .map((t) => {
+              const aggregators = eventTks.filter(
+                (tk) =>
+                  tk.ticket_type_id === t.id &&
+                  !tk.parent_bundle_type_id &&
+                  (tk.status === "valid" || tk.status === "used"),
+              );
+              const aggScanned = aggregators.filter(
+                (tk) => tk.status === "used",
+              ).length;
+              const packSize = Array.isArray(t.bundle_items)
+                ? (t.bundle_items as { quantity: number }[]).reduce(
+                    (s, c) => s + c.quantity,
+                    0,
+                  )
+                : 0;
+              return {
+                id: t.id as string,
+                name: t.name as string,
+                pack_size: packSize,
+                packs_sold: aggregators.length,
+                packs_scanned: aggScanned,
+              };
+            })
+            .filter((b) => b.packs_sold > 0)
+            .sort((a, b) => b.packs_sold - a.packs_sold);
+
+          return {
+            id: e.id as string,
+            name: e.name as string,
+            slug: e.slug as string,
+            event_date: e.event_date as string,
+            venue: (e.venue as string) || null,
+            total_people: total,
+            scanned,
+            remaining,
+            last_scan_at: lastScanAt,
+            types: typesBreakdown,
+            bundles: bundlesBreakdown,
+          };
+        });
+        return NextResponse.json(result);
       }
 
       // events-list — per-event breakdown
@@ -809,9 +924,7 @@ export async function GET(request: NextRequest) {
             ).length,
             rejected_orders: eventOrders.filter((o) => o.status === "rejected")
               .length,
-            tickets_issued: eventTks.filter(
-              (t) => t.status === "valid" || t.status === "used",
-            ).length,
+            tickets_issued: eventTks.filter(isPersonTicket).length,
             total_amount_collected: eventOrders
               .filter((o) => o.status === "approved")
               .reduce((s, o) => s + Number(o.total_amount || 0), 0),

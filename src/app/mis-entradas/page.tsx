@@ -23,6 +23,9 @@ interface TicketRow {
   } | null;
   ticket_type: { id: string; name: string; color: string | null } | null;
   parent_bundle: { id: string; name: string } | null;
+  is_aggregator?: boolean;
+  bundle_size?: number;
+  bundle_label?: string | null;
 }
 
 interface OrderRow {
@@ -200,6 +203,7 @@ function MisEntradasContent() {
 
 function TicketCard({ ticket }: { ticket: TicketRow }) {
   const isUsed = ticket.status === "used";
+  const isAgg = !!ticket.is_aggregator && (ticket.bundle_size ?? 1) > 1;
   return (
     <div
       className={`overflow-hidden rounded-2xl border-2 ${
@@ -212,17 +216,25 @@ function TicketCard({ ticket }: { ticket: TicketRow }) {
         <p className="text-sm font-semibold text-navy-700">
           {ticket.ticket_type?.name || "Entrada"}
         </p>
-        {ticket.parent_bundle && (
-          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700">
-            📦 {ticket.parent_bundle.name}
-          </span>
-        )}
         {isUsed && (
           <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
             USADA
           </span>
         )}
       </div>
+
+      {isAgg && (
+        <div className="mb-2 rounded-lg bg-purple-50 px-2 py-1.5 text-purple-700">
+          <p className="text-xs font-bold">
+            📦 Válido para {ticket.bundle_size} personas
+          </p>
+          {ticket.bundle_label && (
+            <p className="mt-0.5 text-[10px] opacity-80">
+              {ticket.bundle_label}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="inline-block rounded-xl bg-white p-3 shadow-sm">
         <QRCodeSVG

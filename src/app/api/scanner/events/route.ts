@@ -8,10 +8,11 @@ import {
  * GET /api/scanner/events
  *
  * Lists events the current user can scan.
- * - Admins: all active or past events
- * - Sellers: only events where event_sellers.can_scan = true
+ * - Admins: all active events
+ * - Sellers: only active events where event_sellers.can_scan = true
  *
- * The scanner UI uses this to populate the event picker.
+ * Past events are hidden to avoid clutter. To scan late-comers after an
+ * event closes, an admin can temporarily flip the event back to active.
  */
 export async function GET() {
   try {
@@ -40,11 +41,10 @@ export async function GET() {
     let events: { id: string; name: string; slug: string; event_date: string; venue: string | null; status: string }[] = [];
 
     if (isAdmin) {
-      // All scannable events (active or past — past so admins can scan late-comers)
       const { data } = await service
         .from("events")
         .select("id, name, slug, event_date, venue, status")
-        .in("status", ["active", "past"])
+        .eq("status", "active")
         .order("event_date", { ascending: false });
       events = data || [];
     } else {
@@ -70,7 +70,7 @@ export async function GET() {
             } | null,
         )
         .filter((e): e is NonNullable<typeof e> =>
-          Boolean(e && (e.status === "active" || e.status === "past")),
+          Boolean(e && e.status === "active"),
         )
         .sort((a, b) => b.event_date.localeCompare(a.event_date));
     }
