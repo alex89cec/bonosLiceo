@@ -26,6 +26,9 @@ interface ScanResultData {
     type_name: string;
     type_color?: string | null;
     parent_bundle_name: string | null;
+    is_aggregator?: boolean;
+    bundle_size?: number;
+    bundle_components_label?: string | null;
     entered_at?: string | null;
     entered_by_name?: string | null;
     actual_event_name?: string | null;
@@ -425,22 +428,40 @@ function ResultOverlay({
           </p>
         )}
 
+        {t?.is_aggregator && (t.bundle_size ?? 0) > 1 && (
+          <div className="mt-3 rounded-2xl bg-black/15 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
+              📦 {t.type_name}
+            </p>
+            <p className="mt-1 text-3xl font-extrabold leading-none">
+              Pasan {t.bundle_size} personas
+            </p>
+            {t.bundle_components_label && (
+              <p className="mt-1 text-xs opacity-80">
+                ({t.bundle_components_label})
+              </p>
+            )}
+          </div>
+        )}
+
         {t && (
           <div className="mt-4 space-y-1 text-sm">
             {t.buyer_name && (
               <p className="font-semibold">{t.buyer_name}</p>
             )}
-            <p>
-              {t.type_name}
-              {t.parent_bundle_name && (
-                <span className="ml-1 text-xs opacity-80">
-                  · 📦 {t.parent_bundle_name}
-                </span>
-              )}
-              {t.is_complimentary && (
-                <span className="ml-1 text-xs opacity-80">· 🎁 Cortesía</span>
-              )}
-            </p>
+            {!(t.is_aggregator && (t.bundle_size ?? 0) > 1) && (
+              <p>
+                {t.type_name}
+                {t.parent_bundle_name && (
+                  <span className="ml-1 text-xs opacity-80">
+                    · 📦 {t.parent_bundle_name}
+                  </span>
+                )}
+                {t.is_complimentary && (
+                  <span className="ml-1 text-xs opacity-80">· 🎁 Cortesía</span>
+                )}
+              </p>
+            )}
 
             {result.result === "already_used" && t.entered_at && (
               <p className="mt-2 text-xs opacity-80">
