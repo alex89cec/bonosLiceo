@@ -1,10 +1,13 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 import Link from "next/link";
+
+const REMEMBER_MAX_AGE = 7 * 24 * 60 * 60;
+const LAST_EMAIL_KEY = "rifas:last_email";
 
 function LoginForm() {
   const router = useRouter();
@@ -17,10 +20,38 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LAST_EMAIL_KEY);
+      if (saved) setEmail(saved);
+    } catch {
+      // localStorage unavailable (private mode etc) — silent fallback
+    }
+  }, []);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Persist preferences BEFORE signin so the browser client picks up
+    // remember_me when writing Supabase auth cookies.
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    if (rememberMe) {
+      document.cookie = `remember_me=1; path=/; max-age=${REMEMBER_MAX_AGE}; SameSite=Lax${secure}`;
+      try {
+        localStorage.setItem(LAST_EMAIL_KEY, email);
+      } catch {
+        // ignore
+      }
+    } else {
+      document.cookie = `remember_me=; path=/; max-age=0; SameSite=Lax${secure}`;
+      try {
+        localStorage.removeItem(LAST_EMAIL_KEY);
+      } catch {
+        // ignore
+      }
+    }
 
     const supabase = createClient();
     const { data: authData, error: authError } =
@@ -33,13 +64,6 @@ function LoginForm() {
       setError(authError.message);
       setLoading(false);
       return;
-    }
-
-    // Set remember_me cookie (7 days) or clear it
-    if (rememberMe) {
-      document.cookie = `remember_me=1; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax; Secure`;
-    } else {
-      document.cookie = "remember_me=; path=/; max-age=0; SameSite=Lax; Secure";
     }
 
     // Check profile for role and must_change_password
