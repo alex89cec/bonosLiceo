@@ -4,8 +4,12 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 export default function EventsSummaryTab({ data }: { data: EventsSummary }) {
   return (
     <div className="space-y-6">
-      {/* Top KPI cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {/* Top KPI cards. Cortesías card only shows when there are any. */}
+      <div
+        className={`grid grid-cols-2 gap-3 ${
+          data.complimentary_tickets > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"
+        }`}
+      >
         <KpiCard
           label="Cobrado"
           value={formatCurrency(data.total_amount_collected)}
@@ -17,10 +21,17 @@ export default function EventsSummaryTab({ data }: { data: EventsSummary }) {
           tone="amber"
         />
         <KpiCard
-          label="Entradas emitidas"
+          label="Vendidas"
           value={formatNumber(data.total_tickets_issued)}
           tone="blue"
         />
+        {data.complimentary_tickets > 0 && (
+          <KpiCard
+            label="🎁 Cortesías"
+            value={formatNumber(data.complimentary_tickets)}
+            tone="purple"
+          />
+        )}
         <KpiCard
           label="Eventos activos"
           value={`${data.active_events} / ${data.total_events}`}
@@ -67,13 +78,14 @@ function KpiCard({
 }: {
   label: string;
   value: string;
-  tone: "green" | "amber" | "blue" | "navy";
+  tone: "green" | "amber" | "blue" | "navy" | "purple";
 }) {
   const map = {
     green: "text-green-600",
     amber: "text-amber-600",
     blue: "text-blue-600",
     navy: "text-navy-700",
+    purple: "text-purple-600",
   };
   return (
     <div className="card text-center">
