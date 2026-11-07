@@ -43,8 +43,13 @@ export default function EventsListTab({ data }: { data: EventReportRow[] }) {
               </div>
             </div>
 
-            {/* Money + tickets stats */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {/* Money + tickets stats. Cortesías row only appears when
+                there are any, so events without freebies stay compact. */}
+            <div
+              className={`grid gap-2 grid-cols-2 ${
+                e.complimentary_tickets > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"
+              }`}
+            >
               <div className="rounded-lg bg-green-50 p-2 text-center">
                 <p className="text-sm font-bold text-green-600">
                   {formatCurrency(e.total_amount_collected)}
@@ -61,8 +66,16 @@ export default function EventsListTab({ data }: { data: EventReportRow[] }) {
                 <p className="text-lg font-bold text-blue-600">
                   {formatNumber(e.tickets_issued)}
                 </p>
-                <p className="text-[10px] text-blue-700/80">Entradas</p>
+                <p className="text-[10px] text-blue-700/80">Vendidas</p>
               </div>
+              {e.complimentary_tickets > 0 && (
+                <div className="rounded-lg bg-purple-50 p-2 text-center">
+                  <p className="text-lg font-bold text-purple-600">
+                    🎁 {formatNumber(e.complimentary_tickets)}
+                  </p>
+                  <p className="text-[10px] text-purple-700/80">Cortesías</p>
+                </div>
+              )}
               <div className="rounded-lg bg-navy-50 p-2 text-center">
                 <p className="text-lg font-bold text-navy-700">
                   {e.total_orders}

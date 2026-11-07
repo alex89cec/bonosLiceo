@@ -170,6 +170,35 @@ function EventCard({ ev }: { ev: EventLiveRow }) {
         </div>
       )}
 
+      {/* Cortesías */}
+      {(ev.complimentary_total ?? 0) > 0 && (
+        <div className="space-y-1 border-t border-navy-50 bg-purple-50/40 px-5 pb-3 pt-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-purple-700">
+              🎁 Cortesías (aparte de las vendidas)
+            </p>
+            <span className="font-mono text-xs text-navy-500">
+              <span className="font-bold text-green-600">
+                {ev.complimentary_scanned}
+              </span>
+              /{ev.complimentary_total}
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-purple-100">
+            <div
+              className="h-full rounded-full bg-purple-500 transition-all"
+              style={{
+                width: `${
+                  ev.complimentary_total > 0
+                    ? (ev.complimentary_scanned / ev.complimentary_total) * 100
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Bundles / packs */}
       {(ev.bundles?.length ?? 0) > 0 && (
         <div className="space-y-2 border-t border-navy-50 bg-purple-50/40 px-5 pb-4 pt-4">

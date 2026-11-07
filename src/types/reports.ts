@@ -142,7 +142,11 @@ export interface EventsSummary {
   pending_orders: number; // pending_review + awaiting_receipt
   rejected_orders: number;
   complimentary_orders: number;
+  /** Paid tickets — cortesías are excluded (see complimentary_tickets). */
   total_tickets_issued: number;
+  /** Free tickets (cortesías) — tracked separately so the headline
+   *  "Vendidas" only reflects actual sales. */
+  complimentary_tickets: number;
   total_amount_collected: number;
   total_amount_pending: number;
 }
@@ -168,7 +172,10 @@ export interface EventReportRow {
   approved_orders: number;
   pending_orders: number;
   rejected_orders: number;
+  /** Paid tickets — cortesías excluded. */
   tickets_issued: number;
+  /** Free tickets (cortesías) for this event. */
+  complimentary_tickets: number;
   total_amount_collected: number;
   total_amount_pending: number;
   types: EventReportTypeBreakdown[];
@@ -200,9 +207,13 @@ export interface EventLiveRow {
   slug: string;
   event_date: string;
   venue: string | null;
+  /** People with paid tickets (cortesías excluded — see complimentary_*). */
   total_people: number;
   scanned: number;
   remaining: number;
+  /** Cortesías (free tickets) issued for this event. Tracked separately. */
+  complimentary_total: number;
+  complimentary_scanned: number;
   last_scan_at: string | null;
   types: EventLiveTypeBreakdown[];
   bundles: EventLiveBundleBreakdown[];

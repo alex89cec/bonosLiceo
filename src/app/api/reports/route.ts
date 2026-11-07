@@ -671,7 +671,9 @@ export async function GET(request: NextRequest) {
         ),
         supabase
           .from("event_ticket_types")
-          .select("id, event_id, name, color, quantity, bundle_items"),
+          .select(
+            "id, event_id, name, color, quantity, bundle_items, is_complimentary",
+          ),
         supabase.from("buyers").select("id, email, full_name"),
         supabase.from("profiles").select("id, full_name, email, seller_code"),
       ]);
@@ -699,6 +701,20 @@ export async function GET(request: NextRequest) {
       const isPersonTicket = (t: { ticket_type_id: string; status: string }) =>
         (t.status === "valid" || t.status === "used") &&
         !bundleTypeIds.has(t.ticket_type_id);
+
+      // Complimentary types (e.g. "Entrada Artista") — counted separately
+      // from sold tickets in the reports UI so the "Vendidas" number
+      // doesn't include the freebies.
+      const complimentaryTypeIds = new Set(
+        types
+          .filter((t) => t.is_complimentary === true)
+          .map((t) => t.id as string),
+      );
+      const isComplimentaryPersonTicket = (t: {
+        ticket_type_id: string;
+        status: string;
+      }) =>
+        isPersonTicket(t) && complimentaryTypeIds.has(t.ticket_type_id);
       const buyersMapEv = new Map(
         (eventBuyers || []).map((b) => [
           b.id as string,
@@ -734,7 +750,11 @@ export async function GET(request: NextRequest) {
           complimentary_orders: orders.filter(
             (o) => o.status === "complimentary",
           ).length,
-          total_tickets_issued: tickets.filter(isPersonTicket).length,
+          total_tickets_issued: tickets.filter(
+            (t) => isPersonTicket(t) && !isComplimentaryPersonTicket(t),
+          ).length,
+          complimentary_tickets: tickets.filter(isComplimentaryPersonTicket)
+            .length,
           total_amount_collected: orders
             .filter((o) => o.status === "approved")
             .reduce((s, o) => s + Number(o.total_amount || 0), 0),
@@ -756,25 +776,43 @@ export async function GET(request: NextRequest) {
         const result: EventLiveRow[] = eventsList.map((e) => {
           const eventTks = tickets.filter((t) => t.event_id === e.id);
           const eventTps = types.filter((t) => t.event_id === e.id);
-          const personTickets = eventTks.filter(isPersonTicket);
+          const allPersonTks = eventTks.filter(isPersonTicket);
+          // Sold tickets exclude complimentary types so the big "Vendidas"
+          // headline shows what was actually paid for. Cortesías get their
+          // own counter so the door still knows how many are coming.
+          const personTickets = allPersonTks.filter(
+            (t) => !isComplimentaryPersonTicket(t),
+          );
+          const compliPersonTks = allPersonTks.filter(
+            isComplimentaryPersonTicket,
+          );
           const scanned = personTickets.filter(
             (t) => t.status === "used",
           ).length;
           const total = personTickets.length;
           const remaining = total - scanned;
+          const compliTotal = compliPersonTks.length;
+          const compliScanned = compliPersonTks.filter(
+            (t) => t.status === "used",
+          ).length;
 
-          // Last scan timestamp across all person tickets of this event.
+          // Last scan timestamp across ALL person tickets of this event
+          // (including cortesías — they also walk through the door).
           let lastScanAt: string | null = null;
-          for (const t of personTickets) {
+          for (const t of allPersonTks) {
             const ts = t.entered_at as string | null;
             if (!ts) continue;
             if (!lastScanAt || ts > lastScanAt) lastScanAt = ts;
           }
 
-          // Per-type breakdown: a person ticket is a component (count it
-          // under its own type, not the bundle type) or a non-bundle ticket.
+          // Per-type breakdown: skip bundle types (handled below) AND
+          // complimentary types (handled in the cortesías block).
           const typesBreakdown: EventLiveTypeBreakdown[] = eventTps
-            .filter((t) => !bundleTypeIds.has(t.id as string))
+            .filter(
+              (t) =>
+                !bundleTypeIds.has(t.id as string) &&
+                !complimentaryTypeIds.has(t.id as string),
+            )
             .map((t) => {
               const ofType = personTickets.filter(
                 (tk) => tk.ticket_type_id === t.id,
@@ -835,6 +873,8 @@ export async function GET(request: NextRequest) {
             total_people: total,
             scanned,
             remaining,
+            complimentary_total: compliTotal,
+            complimentary_scanned: compliScanned,
             last_scan_at: lastScanAt,
             types: typesBreakdown,
             bundles: bundlesBreakdown,
@@ -924,7 +964,12 @@ export async function GET(request: NextRequest) {
             ).length,
             rejected_orders: eventOrders.filter((o) => o.status === "rejected")
               .length,
-            tickets_issued: eventTks.filter(isPersonTicket).length,
+            tickets_issued: eventTks.filter(
+              (t) => isPersonTicket(t) && !isComplimentaryPersonTicket(t),
+            ).length,
+            complimentary_tickets: eventTks.filter(
+              isComplimentaryPersonTicket,
+            ).length,
             total_amount_collected: eventOrders
               .filter((o) => o.status === "approved")
               .reduce((s, o) => s + Number(o.total_amount || 0), 0),
