@@ -24,10 +24,29 @@ const STATUS_FILTERS = [
 
 type StatusKey = (typeof STATUS_FILTERS)[number]["key"];
 
+const MAIL_FILTERS = [
+  { key: "all", label: "Todos" },
+  { key: "sent", label: "Enviado" },
+  { key: "failed", label: "Falló" },
+  { key: "none", label: "Sin registro" },
+] as const;
+
+type MailKey = (typeof MAIL_FILTERS)[number]["key"];
+
+type MailState = Pick<
+  BonosDetailRow,
+  "email_status" | "email_at" | "email_error" | "email_sends"
+>;
+
 export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusKey>("all");
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  const [mailFilter, setMailFilter] = useState<MailKey>("all");
+  // Mail state after a resend from this table, so it shows without a refetch
+  const [mailOverrides, setMailOverrides] = useState<Record<string, MailState>>(
+    {},
+  );
   // Local overrides so the table reflects edits without a refetch
   const [emailOverrides, setEmailOverrides] = useState<Record<string, string>>(
     {},
@@ -45,29 +64,37 @@ export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [data]);
 
+  const rows = useMemo(
+    () =>
+      data.map((r) => {
+        const sellerOverride = sellerOverrides[r.id];
+        return {
+          ...r,
+          ...mailOverrides[r.id],
+          buyer_email: emailOverrides[r.id] || r.buyer_email,
+          seller_id: sellerOverride ? sellerOverride.id : r.seller_id,
+          seller_name: sellerOverride ? sellerOverride.name : r.seller_name,
+          seller_code: sellerOverride ? sellerOverride.code : r.seller_code,
+        };
+      }),
+    [data, emailOverrides, sellerOverrides, mailOverrides],
+  );
+
   const filtered = useMemo(() => {
-    let result = data.map((r) => {
-      const sellerOverride = sellerOverrides[r.id];
-      return {
-        ...r,
-        buyer_email: emailOverrides[r.id] || r.buyer_email,
-        seller_id: sellerOverride
-          ? sellerOverride.id
-          : r.seller_id,
-        seller_name: sellerOverride
-          ? sellerOverride.name
-          : r.seller_name,
-        seller_code: sellerOverride
-          ? sellerOverride.code
-          : r.seller_code,
-      };
-    });
+    let result = rows;
 
     if (statusFilter !== "all") {
       result = result.filter((r) => r.status === statusFilter);
     }
     if (campaignFilter !== "all") {
       result = result.filter((r) => r.campaign_id === campaignFilter);
+    }
+    if (mailFilter !== "all") {
+      result = result.filter((r) =>
+        mailFilter === "none"
+          ? r.email_status === null
+          : r.email_status === mailFilter,
+      );
     }
     if (search.trim()) {
       const q = search.toLowerCase().trim();
@@ -81,7 +108,7 @@ export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
       );
     }
     return result;
-  }, [data, statusFilter, campaignFilter, search, emailOverrides, sellerOverrides]);
+  }, [rows, statusFilter, campaignFilter, mailFilter, search]);
 
   const counts = useMemo(() => {
     return {
@@ -91,6 +118,63 @@ export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
       cancelled: data.filter((r) => r.status === "cancelled").length,
     };
   }, [data]);
+
+  const mailCounts = useMemo(() => {
+    return {
+      all: rows.length,
+      sent: rows.filter((r) => r.email_status === "sent").length,
+      failed: rows.filter((r) => r.email_status === "failed").length,
+      none: rows.filter((r) => r.email_status === null).length,
+    };
+  }, [rows]);
+
+  // One email per buyer+campaign, like the original send: resending a row
+  // re-sends every live number that buyer holds in that campaign.
+  async function resendMail(row: (typeof rows)[number]): Promise<void> {
+    const group = rows.filter(
+      (x) =>
+        x.buyer_id === row.buyer_id &&
+        x.campaign_id === row.campaign_id &&
+        x.status !== "cancelled",
+    );
+    const numbers = group.map((x) => `#${x.ticket_number}`).join(", ");
+    if (
+      !window.confirm(
+        `¿Reenviar el mail de confirmación a ${row.buyer_email}?\nIncluye: ${numbers}`,
+      )
+    ) {
+      return;
+    }
+
+    let ok = false;
+    let error: string | null = null;
+    try {
+      const res = await fetch("/api/emails/buyer-confirmation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reservation_ids: group.map((x) => x.id) }),
+      });
+      const json = await res.json().catch(() => ({}));
+      ok = res.ok && json.success === true;
+      if (!ok) error = json.results?.[0]?.error || json.error || "Error al enviar";
+    } catch {
+      error = "Error de red";
+    }
+
+    const at = new Date().toISOString();
+    setMailOverrides((prev) => {
+      const next = { ...prev };
+      for (const x of group) {
+        next[x.id] = {
+          email_status: ok ? "sent" : "failed",
+          email_at: at,
+          email_error: error,
+          email_sends: x.email_sends + (ok ? 1 : 0),
+        };
+      }
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-3">
@@ -139,6 +223,16 @@ export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
             ...campaigns.map(([id, name]) => ({ value: id, label: name })),
           ]}
         />
+
+        <FilterSelect
+          label="Mail"
+          value={mailFilter}
+          onChange={(v) => setMailFilter(v as MailKey)}
+          options={MAIL_FILTERS.map((m) => ({
+            value: m.key,
+            label: `${m.label} (${mailCounts[m.key]})`,
+          }))}
+        />
       </div>
 
       <p className="text-xs text-navy-400">
@@ -154,6 +248,7 @@ export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
               <th className="px-3 py-2">Campaña</th>
               <th className="px-3 py-2">Comprador</th>
               <th className="px-3 py-2">Email</th>
+              <th className="px-3 py-2">Mail</th>
               <th className="px-3 py-2">Vendedor</th>
               <th className="px-3 py-2">Estado</th>
               <th className="px-3 py-2">Pago</th>
@@ -190,6 +285,13 @@ export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
                         [r.id]: newEmail,
                       }))
                     }
+                  />
+                </td>
+                <td className="whitespace-nowrap px-3 py-2">
+                  <MailCell
+                    row={r}
+                    canResend={isAdmin && r.status !== "cancelled"}
+                    onResend={() => resendMail(r)}
                   />
                 </td>
                 <td className="min-w-[140px] max-w-[180px] px-3 py-2 text-xs">
@@ -288,6 +390,16 @@ export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
                 })}
               </span>
             </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-navy-400">
+                Mail
+              </span>
+              <MailCell
+                row={r}
+                canResend={isAdmin && r.status !== "cancelled"}
+                onResend={() => resendMail(r)}
+              />
+            </div>
             {/* Seller picker (mobile) */}
             <div className="mt-2 border-t border-navy-100 pt-2">
               <p className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-navy-400">
@@ -320,6 +432,74 @@ export default function BonosDetailTab({ data, isAdmin, sellers }: Props) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+function MailCell({
+  row,
+  canResend,
+  onResend,
+}: {
+  row: MailState;
+  canResend: boolean;
+  onResend: () => Promise<void>;
+}) {
+  const [sending, setSending] = useState(false);
+
+  const when = row.email_at
+    ? new Date(row.email_at).toLocaleString("es-AR", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  const badge =
+    row.email_status === "sent" ? (
+      <span
+        className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700"
+        title={`Último envío: ${when}${row.email_sends > 1 ? ` · enviado ${row.email_sends} veces` : ""}`}
+      >
+        Enviado{row.email_sends > 1 ? ` ×${row.email_sends}` : ""}
+      </span>
+    ) : row.email_status === "failed" ? (
+      <span
+        className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700"
+        title={row.email_error || "El envío falló"}
+      >
+        Falló
+      </span>
+    ) : (
+      <span
+        className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500"
+        title="No hay registro de envío. Los mails anteriores a este registro también aparecen así."
+      >
+        Sin registro
+      </span>
+    );
+
+  return (
+    <div className="flex items-center gap-2">
+      <div>
+        {badge}
+        {when && <p className="mt-0.5 text-[9px] text-navy-400">{when}</p>}
+      </div>
+      {canResend && (
+        <button
+          type="button"
+          disabled={sending}
+          onClick={async () => {
+            setSending(true);
+            await onResend();
+            setSending(false);
+          }}
+          className="rounded-md border border-navy-200 px-1.5 py-0.5 text-[10px] font-medium text-navy-600 transition hover:border-gold-400 hover:bg-gold-50 disabled:opacity-50"
+        >
+          {sending ? "Enviando…" : "Reenviar"}
+        </button>
+      )}
     </div>
   );
 }

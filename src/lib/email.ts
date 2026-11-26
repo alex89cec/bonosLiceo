@@ -127,7 +127,7 @@ export interface BuyerEmailData {
 
 export async function sendBuyerConfirmationEmail(
   data: BuyerEmailData,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; id?: string }> {
   const appUrl = getAppUrl();
   const greeting = data.buyerName ? `¡Hola ${data.buyerName}!` : "¡Hola!";
   const isSingle = data.ticketNumbers.length === 1;
@@ -284,7 +284,7 @@ export async function sendBuyerConfirmationEmail(
   `);
 
   try {
-    const { error } = await resend.emails.send({
+    const { data: sent, error } = await resend.emails.send({
       from: FROM_EMAIL,
       to: data.buyerEmail,
       subject,
@@ -296,7 +296,7 @@ export async function sendBuyerConfirmationEmail(
       return { success: false, error: error.message };
     }
 
-    return { success: true };
+    return { success: true, id: sent?.id };
   } catch (err) {
     console.error("Buyer email send error:", err);
     return { success: false, error: "Error al enviar email al comprador" };

@@ -589,6 +589,33 @@ export async function GET(request: NextRequest) {
         ]),
       );
 
+      // Confirmation-email log: latest attempt + successful send count per bono.
+      // Newest first, so the first log seen for a reservation is its latest.
+      const { data: emailLogs } = await supabase
+        .from("bono_email_logs")
+        .select("reservation_ids, status, error, created_at")
+        .order("created_at", { ascending: false });
+      const emailByRes = new Map<
+        string,
+        { status: "sent" | "failed"; at: string; error: string | null; sends: number }
+      >();
+      for (const log of emailLogs || []) {
+        for (const rid of log.reservation_ids as string[]) {
+          const cur = emailByRes.get(rid);
+          const sent = log.status === "sent" ? 1 : 0;
+          if (cur) {
+            cur.sends += sent;
+          } else {
+            emailByRes.set(rid, {
+              status: log.status as "sent" | "failed",
+              at: log.created_at as string,
+              error: (log.error as string) || null,
+              sends: sent,
+            });
+          }
+        }
+      }
+
       const rows: BonosDetailRow[] = allReservations
         .filter((r) => filteredCampaignIds.has(r.campaign_id))
         .map((r) => {
@@ -596,6 +623,7 @@ export async function GET(request: NextRequest) {
           const buyer = buyerById.get(r.buyer_id);
           const campaign = allCampaigns.find((c) => c.id === r.campaign_id);
           const payment = paymentByRes.get(r.id);
+          const email = emailByRes.get(r.id);
           return {
             id: r.id,
             ticket_number: ticketNumberMap2.get(r.ticket_id) || "—",
@@ -613,6 +641,10 @@ export async function GET(request: NextRequest) {
               (payment?.status as "pending" | "partial" | "completed") ?? null,
             amount: payment?.amount || 0,
             created_at: dateById.get(r.id) || "",
+            email_status: email?.status ?? null,
+            email_at: email?.at ?? null,
+            email_error: email?.error ?? null,
+            email_sends: email?.sends ?? 0,
           };
         })
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
