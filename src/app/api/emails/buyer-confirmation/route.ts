@@ -177,6 +177,23 @@ export async function POST(request: NextRequest) {
       };
 
       const result = await sendBuyerConfirmationEmail(emailData);
+
+      const { error: logError } = await serviceClient
+        .from("bono_email_logs")
+        .insert({
+          buyer_id: buyerId,
+          campaign_id: firstRes.campaign_id,
+          reservation_ids: buyerReservations.map((r) => r.id),
+          recipient: buyer.email,
+          status: result.success ? "sent" : "failed",
+          provider_id: result.id ?? null,
+          error: result.error ?? null,
+          sent_by: user.id,
+        });
+      if (logError) {
+        console.error("bono_email_logs insert error:", logError);
+      }
+
       results.push({
         email: buyer.email,
         success: result.success,

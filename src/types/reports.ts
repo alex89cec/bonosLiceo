@@ -129,6 +129,12 @@ export interface BonosDetailRow {
   payment_status: "pending" | "partial" | "completed" | null;
   amount: number;
   created_at: string;
+  /** Latest confirmation-email attempt covering this bono; null = no log. */
+  email_status: "sent" | "failed" | null;
+  email_at: string | null;
+  email_error: string | null;
+  /** Successful sends so far (resends included). */
+  email_sends: number;
 }
 
 // ============================================================
